@@ -1,0 +1,23 @@
+{
+  "name": "@bot/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --host 0.0.0.0 --port 4173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@bot/shared": "workspace:*",
+    "svelte": "latest"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "latest",
+    "bun-types": "latest",
+    "svelte-check": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

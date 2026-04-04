@@ -1,0 +1,16 @@
+{
+  "name": "qq-bot-platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @bot/server dev",
+    "dev:server": "bun run --filter @bot/server dev",
+    "dev:dashboard": "bun run --filter @bot/dashboard dev",
+    "build": "bun run --filter @bot/server build && bun run --filter @bot/dashboard build",
+    "start": "bun run --filter @bot/server start",
+    "typecheck": "bun run --filter @bot/server typecheck && bun run --filter @bot/dashboard typecheck"
+  }
+}
