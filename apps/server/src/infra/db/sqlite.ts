@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { Database } from "bun:sqlite";
 import type {
   BotSettings,
+  ChatMessage,
   LogLevel,
   LogRecord,
   PluginPermissions,
@@ -17,6 +18,8 @@ const DEFAULT_SETTINGS: BotSettings = {
   systemPrompt: "You are a helpful QQ assistant.",
   requestTimeoutMs: 30000,
   pluginTimeoutMs: 8000,
+  memoryMaxTurns: 16,
+  chatResetCommand: "/clean",
   webFetchEnabled: true,
   webFetchTimeoutMs: 12000,
   webFetchMaxBytes: 800000,
@@ -54,6 +57,12 @@ export class BotDatabase {
     this.ensureColumnExists("plugins", "permissions", "TEXT");
     this.db.run(
       "CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, level TEXT NOT NULL, source TEXT NOT NULL, trace_id TEXT NOT NULL, message TEXT NOT NULL, data TEXT)"
+    );
+    this.db.run(
+      "CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_key TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, ts INTEGER NOT NULL)"
+    );
+    this.db.run(
+      "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_key, id DESC)"
     );
   }
 
@@ -271,6 +280,34 @@ export class BotDatabase {
     limit?: number;
   }): LogRecord[] {
     return this.queryLogs(filters).logs;
+  }
+
+  appendSessionMessage(sessionKey: string, role: ChatMessage["role"], content: string): void {
+    this.db
+      .prepare(
+        "INSERT INTO chat_messages (session_key, role, content, ts) VALUES (?, ?, ?, ?)"
+      )
+      .run(sessionKey, role, content, Date.now());
+  }
+
+  listSessionMessages(sessionKey: string, limit: number): ChatMessage[] {
+    const safeLimit = Math.max(1, Math.min(limit, 200));
+    const rows = this.db
+      .prepare(
+        "SELECT role, content FROM chat_messages WHERE session_key = ? ORDER BY id DESC LIMIT ?"
+      )
+      .all(sessionKey, safeLimit) as { role: string; content: string }[];
+
+    return rows
+      .reverse()
+      .map((row) => ({
+        role: row.role === "assistant" ? "assistant" : "user",
+        content: row.content
+      }));
+  }
+
+  clearSessionMessages(sessionKey: string): void {
+    this.db.prepare("DELETE FROM chat_messages WHERE session_key = ?").run(sessionKey);
   }
 }
 

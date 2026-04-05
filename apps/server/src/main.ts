@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { OneBotWsGateway } from "./adapters/onebot/wsGateway";
+import { SessionMemoryService } from "./domain/chat/sessionMemoryService";
 import { ConfigService } from "./domain/config/configService";
 import { LlmService } from "./domain/llm/llmService";
 import { WebFetchService } from "./domain/web/webFetchService";
@@ -24,6 +25,7 @@ const errorReporter = new ErrorReporter(logger);
 const configService = new ConfigService(db);
 const llmService = new LlmService(logger);
 const webFetchService = new WebFetchService(logger);
+const sessionMemoryService = new SessionMemoryService(db);
 
 let wsGateway: OneBotWsGateway;
 const pluginManager = new PluginManager(
@@ -31,6 +33,7 @@ const pluginManager = new PluginManager(
   configService,
   llmService,
   webFetchService,
+  sessionMemoryService,
   logger,
   async (event, text) => {
     await wsGateway.replyTo(event, text);

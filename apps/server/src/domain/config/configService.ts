@@ -29,6 +29,22 @@ export class ConfigService {
     if (payload.pluginTimeoutMs && payload.pluginTimeoutMs < 100) {
       throw new Error("pluginTimeoutMs must be >= 100");
     }
+    if (payload.memoryMaxTurns && payload.memoryMaxTurns < 1) {
+      throw new Error("memoryMaxTurns must be >= 1");
+    }
+    if (payload.memoryMaxTurns && payload.memoryMaxTurns > 50) {
+      throw new Error("memoryMaxTurns must be <= 50");
+    }
+    if (payload.chatResetCommand !== undefined) {
+      const cmd = payload.chatResetCommand.trim();
+      if (!cmd.startsWith("/")) {
+        throw new Error("chatResetCommand must start with /");
+      }
+      if (/\s/.test(cmd)) {
+        throw new Error("chatResetCommand must not include spaces");
+      }
+      payload.chatResetCommand = cmd;
+    }
     if (payload.webFetchTimeoutMs && payload.webFetchTimeoutMs < 1000) {
       throw new Error("webFetchTimeoutMs must be >= 1000");
     }

@@ -11,6 +11,8 @@ export const chatPlugin: BotPlugin = {
   id: "builtin.chat",
   name: "Chat Plugin",
   version: "0.1.0",
+  commands: ["/ask", "/clean"],
+  routePriority: -10,
   permissions: {
     llm: true,
     webFetch: true,
@@ -20,7 +22,16 @@ export const chatPlugin: BotPlugin = {
   },
   async onMessage(event, context) {
     const content = event.raw_message.trim();
+    if (!content) return;
     const urls = extractUrls(content);
+    const resetCommand = context.settings.chatResetCommand || "/clean";
+
+    if (content === resetCommand) {
+      context.clearHistory();
+      await context.reply("Session history cleared.");
+      context.log("Session history cleared");
+      return;
+    }
 
     if (content === "/ask") {
       await context.reply(HELP_TEXT);
@@ -28,7 +39,6 @@ export const chatPlugin: BotPlugin = {
     }
 
     const isAskCommand = content.startsWith("/ask ");
-    if (!isAskCommand && urls.length === 0) return;
     const question = isAskCommand ? content.slice("/ask ".length).trim() : content;
     if (!question) {
       await context.reply(HELP_TEXT);
@@ -62,8 +72,10 @@ export const chatPlugin: BotPlugin = {
         webContextBlocks.length > 0
           ? `Fetched URL context:\n\n${webContextBlocks.join("\n\n---\n\n")}`
           : undefined;
-      const answer = await context.askLlm(question, extraContext);
+      const history = context.getRecentHistory(context.settings.memoryMaxTurns);
+      const answer = await context.askLlm(question, extraContext, history);
       await context.reply(answer);
+      context.appendHistoryTurn(question, answer);
       context.log("LLM reply completed");
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";

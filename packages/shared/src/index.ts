@@ -15,6 +15,8 @@ export type BotSettings = {
   systemPrompt: string;
   requestTimeoutMs: number;
   pluginTimeoutMs: number;
+  memoryMaxTurns: number;
+  chatResetCommand: string;
   webFetchEnabled: boolean;
   webFetchTimeoutMs: number;
   webFetchMaxBytes: number;
@@ -63,4 +65,9 @@ export type LogRecord = {
   traceId: string;
   message: string;
   data?: string;
+};
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
 };

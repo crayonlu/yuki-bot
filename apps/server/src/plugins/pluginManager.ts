@@ -1,10 +1,16 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { OneBotMessageEvent, PluginPermissions, PluginRuntimeState } from "@bot/shared";
+import type {
+  ChatMessage,
+  OneBotMessageEvent,
+  PluginPermissions,
+  PluginRuntimeState
+} from "@bot/shared";
 import type { AppLogger } from "../infra/logger";
 import type { BotDatabase } from "../infra/db/sqlite";
 import type { ConfigService } from "../domain/config/configService";
 import type { WebFetchService } from "../domain/web/webFetchService";
+import type { SessionMemoryService } from "../domain/chat/sessionMemoryService";
 import { echoPlugin } from "./builtin/echoPlugin";
 import { chatPlugin } from "./builtin/chatPlugin";
 import type { BotPlugin, LoadedPlugin } from "./types";
@@ -51,6 +57,7 @@ export class PluginManager {
     private readonly configService: ConfigService,
     private readonly llmService: LlmService,
     private readonly webFetchService: WebFetchService,
+    private readonly sessionMemoryService: SessionMemoryService,
     logger: AppLogger,
     private readonly reply: ReplyFn
   ) {
@@ -287,82 +294,143 @@ export class PluginManager {
     });
   }
 
-  async handleMessage(event: OneBotMessageEvent, traceId: string) {
+  private getFirstToken(rawMessage: string): string {
+    const trimmed = rawMessage.trim();
+    if (!trimmed) return "";
+    const [first = ""] = trimmed.split(/\s+/, 1);
+    return first;
+  }
+
+  private resolveCommandTarget(commandToken: string): LoadedPlugin | undefined {
+    const candidates = [...this.loaded.values()].filter(
+      (runtime) =>
+        runtime.enabled &&
+        runtime.loaded &&
+        !!runtime.plugin.onMessage &&
+        !!runtime.plugin.commands?.includes(commandToken)
+    );
+    if (candidates.length === 0) return undefined;
+    candidates.sort((a, b) => {
+      const priorityA = a.plugin.routePriority ?? 0;
+      const priorityB = b.plugin.routePriority ?? 0;
+      if (priorityA !== priorityB) return priorityB - priorityA;
+      return a.plugin.id.localeCompare(b.plugin.id);
+    });
+    if (candidates.length > 1) {
+      this.log.warn("Multiple plugins match same command, selecting highest priority", {
+        command: commandToken,
+        selected: candidates[0]?.plugin.id,
+        candidates: candidates.map((item) => item.plugin.id)
+      });
+    }
+    return candidates[0];
+  }
+
+  private getChatFallbackPlugin(): LoadedPlugin | undefined {
+    const runtime = this.loaded.get(chatPlugin.id);
+    if (!runtime || !runtime.enabled || !runtime.loaded || !runtime.plugin.onMessage) {
+      return undefined;
+    }
+    return runtime;
+  }
+
+  private async runPlugin(runtime: LoadedPlugin, event: OneBotMessageEvent, traceId: string) {
     const settings = this.configService.getSettings();
-    for (const runtime of this.loaded.values()) {
-      if (!runtime.enabled || !runtime.loaded || !runtime.plugin.onMessage) continue;
-      try {
-        const settingsView = runtime.permissions.configRead
-          ? settings
-          : {
-              ...settings,
-              apiKey: "",
-              systemPrompt: ""
-            };
-        await runWithTimeout(settings.pluginTimeoutMs, async () => {
-          await runtime.plugin.onMessage?.(event, {
-            traceId,
-            settings: settingsView,
-            reply: async (text: string) => {
-              if (
-                event.message_type === "private" &&
-                !runtime.permissions.replyPrivate
-              ) {
-                this.deny(`Plugin ${runtime.plugin.id} has no replyPrivate permission`);
-              }
-              if (event.message_type === "group" && !runtime.permissions.replyGroup) {
-                this.deny(`Plugin ${runtime.plugin.id} has no replyGroup permission`);
-              }
-              await this.reply(event, text);
-            },
-            askLlm: async (text: string, extraContext?: string) => {
-              if (!runtime.permissions.llm) {
-                this.deny(`Plugin ${runtime.plugin.id} does not have llm permission`);
-              }
-              return this.llmService.generateReply({
-                userText: text,
-                extraContext,
-                settings,
-                traceId
-              });
-            },
-            fetchUrl: async (url: string) => {
-              if (!runtime.permissions.webFetch) {
-                this.deny(`Plugin ${runtime.plugin.id} does not have webFetch permission`);
-              }
-              return this.webFetchService.fetchUrl(url, settings, traceId);
-            },
-            getSettings: () => {
-              if (!runtime.permissions.configRead) {
-                this.deny(`Plugin ${runtime.plugin.id} has no configRead permission`);
-              }
-              return this.configService.getSettings();
-            },
-            updateSettings: (payload) => {
-              if (!runtime.permissions.configWrite) {
-                this.deny(`Plugin ${runtime.plugin.id} has no configWrite permission`);
-              }
-              return this.configService.updateSettings(payload);
-            },
-            log: (message, data) =>
-              this.log.info(message, { pluginId: runtime.plugin.id, ...data }, traceId)
-          });
+    try {
+      const settingsView = runtime.permissions.configRead
+        ? settings
+        : {
+            ...settings,
+            apiKey: "",
+            systemPrompt: ""
+          };
+      await runWithTimeout(settings.pluginTimeoutMs, async () => {
+        await runtime.plugin.onMessage?.(event, {
+          traceId,
+          settings: settingsView,
+          reply: async (text: string) => {
+            if (
+              event.message_type === "private" &&
+              !runtime.permissions.replyPrivate
+            ) {
+              this.deny(`Plugin ${runtime.plugin.id} has no replyPrivate permission`);
+            }
+            if (event.message_type === "group" && !runtime.permissions.replyGroup) {
+              this.deny(`Plugin ${runtime.plugin.id} has no replyGroup permission`);
+            }
+            await this.reply(event, text);
+          },
+          askLlm: async (
+            text: string,
+            extraContext?: string,
+            history?: ChatMessage[]
+          ) => {
+            if (!runtime.permissions.llm) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have llm permission`);
+            }
+            return this.llmService.generateReply({
+              userText: text,
+              extraContext,
+              history,
+              settings,
+              traceId
+            });
+          },
+          fetchUrl: async (url: string) => {
+            if (!runtime.permissions.webFetch) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have webFetch permission`);
+            }
+            return this.webFetchService.fetchUrl(url, settings, traceId);
+          },
+          getRecentHistory: (maxTurns: number) =>
+            this.sessionMemoryService.getRecentHistory(event, maxTurns),
+          appendHistoryTurn: (userText: string, assistantText: string) =>
+            this.sessionMemoryService.appendTurn(event, userText, assistantText),
+          clearHistory: () => this.sessionMemoryService.clear(event),
+          getSettings: () => {
+            if (!runtime.permissions.configRead) {
+              this.deny(`Plugin ${runtime.plugin.id} has no configRead permission`);
+            }
+            return this.configService.getSettings();
+          },
+          updateSettings: (payload) => {
+            if (!runtime.permissions.configWrite) {
+              this.deny(`Plugin ${runtime.plugin.id} has no configWrite permission`);
+            }
+            return this.configService.updateSettings(payload);
+          },
+          log: (message, data) =>
+            this.log.info(message, { pluginId: runtime.plugin.id, ...data }, traceId)
         });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code =
-          error instanceof PolicyDeniedError
-            ? error.code
-            : undefined;
-        runtime.lastError = message;
-        runtime.updatedAt = Date.now();
-        this.db.setPluginError(runtime.plugin.id, message);
-        this.log.error(
-          "Plugin handler failed",
-          { pluginId: runtime.plugin.id, error: message, code },
-          traceId
-        );
-      }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code =
+        error instanceof PolicyDeniedError
+          ? error.code
+          : undefined;
+      runtime.lastError = message;
+      runtime.updatedAt = Date.now();
+      this.db.setPluginError(runtime.plugin.id, message);
+      this.log.error(
+        "Plugin handler failed",
+        { pluginId: runtime.plugin.id, error: message, code },
+        traceId
+      );
+    }
+  }
+
+  async handleMessage(event: OneBotMessageEvent, traceId: string) {
+    const commandToken = this.getFirstToken(event.raw_message);
+    const target = this.resolveCommandTarget(commandToken);
+    if (target) {
+      await this.runPlugin(target, event, traceId);
+      return;
+    }
+
+    const fallback = this.getChatFallbackPlugin();
+    if (fallback) {
+      await this.runPlugin(fallback, event, traceId);
     }
   }
 }

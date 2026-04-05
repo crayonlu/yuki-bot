@@ -4,6 +4,8 @@ export const echoPlugin: BotPlugin = {
   id: "builtin.echo",
   name: "Echo Plugin",
   version: "0.1.0",
+  commands: ["/ping"],
+  routePriority: 100,
   permissions: {
     replyPrivate: true,
     replyGroup: true

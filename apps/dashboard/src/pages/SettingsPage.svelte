@@ -101,6 +101,14 @@
       Plugin Timeout (ms)
       <input type="number" min="100" step="100" bind:value={settings.pluginTimeoutMs} />
     </label>
+    <label>
+      Memory Max Turns
+      <input type="number" min="1" max="50" step="1" bind:value={settings.memoryMaxTurns} />
+    </label>
+    <label>
+      Reset Command
+      <input bind:value={settings.chatResetCommand} placeholder="/clean" />
+    </label>
     <label class="switch-row">
       <span>Web Fetch Enabled</span>
       <input type="checkbox" bind:checked={settings.webFetchEnabled} />

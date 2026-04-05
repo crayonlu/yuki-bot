@@ -26,6 +26,14 @@ export const settingsRoutes = (deps: AppDeps) =>
           typeof payload.pluginTimeoutMs === "number"
             ? payload.pluginTimeoutMs
             : undefined,
+        memoryMaxTurns:
+          typeof payload.memoryMaxTurns === "number"
+            ? payload.memoryMaxTurns
+            : undefined,
+        chatResetCommand:
+          typeof payload.chatResetCommand === "string"
+            ? payload.chatResetCommand
+            : undefined,
         webFetchEnabled:
           typeof payload.webFetchEnabled === "boolean"
             ? payload.webFetchEnabled

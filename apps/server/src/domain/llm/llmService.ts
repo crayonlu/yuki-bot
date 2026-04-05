@@ -1,4 +1,4 @@
-import type { BotSettings } from "@bot/shared";
+import type { BotSettings, ChatMessage } from "@bot/shared";
 import type { AppLogger } from "../../infra/logger";
 
 export class LlmService {
@@ -11,6 +11,7 @@ export class LlmService {
   async generateReply(input: {
     userText: string;
     extraContext?: string;
+    history?: ChatMessage[];
     settings: BotSettings;
     traceId: string;
   }): Promise<string> {
@@ -26,13 +27,20 @@ export class LlmService {
   private async callOpenAiCompatible(input: {
     userText: string;
     extraContext?: string;
+    history?: ChatMessage[];
     settings: BotSettings;
     traceId: string;
   }) {
-    const { settings, userText, extraContext, traceId } = input;
+    const { settings, userText, extraContext, history, traceId } = input;
     const endpoint = settings.apiBaseUrl.replace(/\/$/, "") + "/chat/completions";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), settings.requestTimeoutMs);
+    const finalUserText = extraContext ? `${userText}\n\n${extraContext}` : userText;
+    const messages = [
+      { role: "system" as const, content: settings.systemPrompt },
+      ...(history ?? []).map((item) => ({ role: item.role, content: item.content })),
+      { role: "user" as const, content: finalUserText }
+    ];
 
     try {
       const response = await fetch(endpoint, {
@@ -44,15 +52,7 @@ export class LlmService {
         signal: controller.signal,
         body: JSON.stringify({
           model: settings.model,
-          messages: [
-            { role: "system", content: settings.systemPrompt },
-            {
-              role: "user",
-              content: extraContext
-                ? `${userText}\n\n${extraContext}`
-                : userText
-            }
-          ],
+          messages,
           temperature: 0.7
         })
       });
