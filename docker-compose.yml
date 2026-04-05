@@ -12,7 +12,7 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - server_data:/workspace/apps/server/data
+      - ./apps/server/data:/workspace/apps/server/data
     depends_on:
       - napcat
 
@@ -46,7 +46,6 @@ services:
       - napcat_plugins:/app/napcat/plugins
 
 volumes:
-  server_data:
   napcat_qq_data:
   napcat_config:
   napcat_plugins:
