@@ -15,8 +15,9 @@ import { PluginManager } from "./plugins/pluginManager"
 
 const PORT = Number(Bun.env.PORT ?? 3001)
 const HOST = Bun.env.HOST ?? "0.0.0.0"
-const dataDir = resolve("apps/server/data")
-const pluginDir = resolve("apps/server/plugins")
+const appRootDir = resolve(import.meta.dir, "..")
+const dataDir = resolve(appRootDir, "data")
+const pluginDir = resolve(appRootDir, "plugins")
 mkdirSync(dataDir, { recursive: true })
 mkdirSync(pluginDir, { recursive: true })
 
