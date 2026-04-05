@@ -1,8 +1,7 @@
-import { defineConfig } from "vite";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { svelte } from "@sveltejs/vite-plugin-svelte"
+import { defineConfig } from "vite"
 
-const apiProxyTarget =
-  process.env.DASHBOARD_API_PROXY_TARGET ?? "http://localhost:3001";
+const apiProxyTarget = process.env.DASHBOARD_API_PROXY_TARGET ?? "http://localhost:3001"
 
 export default defineConfig({
   plugins: [svelte()],
@@ -12,4 +11,4 @@ export default defineConfig({
       "/health": apiProxyTarget
     }
   }
-});
+})

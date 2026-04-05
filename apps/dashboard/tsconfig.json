@@ -2,10 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "moduleResolution": "Bundler",
-    "types": [
-      "svelte",
-      "bun-types"
-    ]
+    "types": ["svelte", "bun-types"]
   },
   "include": [
     "src/**/*.ts",

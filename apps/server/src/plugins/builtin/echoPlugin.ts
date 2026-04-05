@@ -1,4 +1,4 @@
-import type { BotPlugin } from "../types";
+import type { BotPlugin } from "../types"
 
 export const echoPlugin: BotPlugin = {
   id: "builtin.echo",
@@ -11,8 +11,8 @@ export const echoPlugin: BotPlugin = {
     replyGroup: true
   },
   async onMessage(event, context) {
-    if (!event.raw_message.startsWith("/ping")) return;
-    await context.reply("pong");
-    context.log("Handled /ping");
+    if (!event.raw_message.startsWith("/ping")) return
+    await context.reply("pong")
+    context.log("Handled /ping")
   }
-};
+}

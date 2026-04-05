@@ -1,14 +1,14 @@
-import type { AppLogger } from "./logger";
+import type { AppLogger } from "./logger"
 
 export class ErrorReporter {
-  private readonly log;
+  private readonly log
 
   constructor(private readonly logger: AppLogger) {
-    this.log = this.logger.child("error-reporter");
+    this.log = this.logger.child("error-reporter")
   }
 
   capture(error: unknown, context: Record<string, unknown>, traceId?: string) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error"
     this.log.error(
       "Captured runtime error",
       {
@@ -17,6 +17,6 @@ export class ErrorReporter {
         stack: error instanceof Error ? error.stack : undefined
       },
       traceId
-    );
+    )
   }
 }

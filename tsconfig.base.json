@@ -9,8 +9,6 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "types": [
-      "bun-types"
-    ]
+    "types": ["bun-types"]
   }
 }

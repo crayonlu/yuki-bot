@@ -11,6 +11,12 @@
     "dev:dashboard": "bun run --filter @bot/dashboard dev",
     "build": "bun run --filter @bot/server build && bun run --filter @bot/dashboard build",
     "start": "bun run --filter @bot/server start",
-    "typecheck": "bun run --filter @bot/server typecheck && bun run --filter @bot/dashboard typecheck"
+    "typecheck": "bun run --filter @bot/server typecheck && bun run --filter @bot/dashboard typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "format": "biome format . --write"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10"
   }
 }
