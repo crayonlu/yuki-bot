@@ -15,6 +15,11 @@ export type WebFetchResult = {
   contentType: string;
 };
 
+export type ImageGenerateResult = {
+  modelId: string;
+  imageUrls: string[];
+};
+
 export type PluginMessageContext = {
   traceId: string;
   settings: BotSettings;
@@ -25,6 +30,7 @@ export type PluginMessageContext = {
     history?: ChatMessage[]
   ) => Promise<string>;
   fetchUrl: (url: string) => Promise<WebFetchResult>;
+  generateImage: (input: { prompt: string; modelId?: string }) => Promise<ImageGenerateResult>;
   getRecentHistory: (maxTurns: number) => ChatMessage[];
   appendHistoryTurn: (userText: string, assistantText: string) => void;
   clearHistory: () => void;

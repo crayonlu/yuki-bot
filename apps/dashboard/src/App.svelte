@@ -57,7 +57,22 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    font-family:
+      "Inter",
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      "Noto Sans CJK SC",
+      "Noto Sans SC",
+      "Source Han Sans SC",
+      "Segoe UI",
+      Roboto,
+      Helvetica,
+      Arial,
+      sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     background: linear-gradient(180deg, #f4f6fb 0%, #f8f9fc 100%);
     color: #101828;
   }

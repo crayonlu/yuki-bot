@@ -2,6 +2,15 @@ import type { BotSettings, SettingsPayload } from "@bot/shared";
 import { BotDatabase } from "../../infra/db/sqlite";
 import { findProviderById, PROVIDER_PRESETS } from "./providerRegistry";
 
+const isHttpUrl = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 export class ConfigService {
   constructor(private readonly db: BotDatabase) {}
 
@@ -44,6 +53,35 @@ export class ConfigService {
         throw new Error("chatResetCommand must not include spaces");
       }
       payload.chatResetCommand = cmd;
+    }
+    if (payload.imageModelConfigs !== undefined) {
+      const normalized = payload.imageModelConfigs
+        .map((item) => ({
+          id: item.id.trim(),
+          endpoint: item.endpoint.trim()
+        }))
+        .filter((item) => item.id && item.endpoint);
+      const deduped = new Map<string, { id: string; endpoint: string }>();
+      for (const item of normalized) {
+        if (!isHttpUrl(item.endpoint)) {
+          throw new Error(`image endpoint must be http/https URL: ${item.id}`);
+        }
+        deduped.set(item.id, item);
+      }
+      payload.imageModelConfigs = [...deduped.values()];
+      if (payload.imageModelConfigs.length === 0) {
+        throw new Error("imageModelConfigs must not be empty");
+      }
+    }
+    const nextSettings = {
+      ...this.db.getSettings(),
+      ...payload
+    };
+    const hasDefaultModel = nextSettings.imageModelConfigs.some(
+      (item) => item.id === nextSettings.defaultImageModel
+    );
+    if (!hasDefaultModel) {
+      throw new Error("defaultImageModel must exist in imageModelConfigs");
     }
     if (payload.webFetchTimeoutMs && payload.webFetchTimeoutMs < 1000) {
       throw new Error("webFetchTimeoutMs must be >= 1000");

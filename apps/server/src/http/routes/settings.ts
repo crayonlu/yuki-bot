@@ -9,6 +9,21 @@ export const settingsRoutes = (deps: AppDeps) =>
     }))
     .put("/", ({ body }) => {
       const payload = (body ?? {}) as Record<string, unknown>;
+      const imageModelConfigs = Array.isArray(payload.imageModelConfigs)
+        ? payload.imageModelConfigs
+            .map((item) => {
+              if (!item || typeof item !== "object") return undefined;
+              const value = item as Record<string, unknown>;
+              if (typeof value.id !== "string" || typeof value.endpoint !== "string") {
+                return undefined;
+              }
+              return {
+                id: value.id,
+                endpoint: value.endpoint
+              };
+            })
+            .filter((item): item is { id: string; endpoint: string } => !!item)
+        : undefined;
       const updated = deps.configService.updateSettings({
         providerId:
           typeof payload.providerId === "string" ? payload.providerId : undefined,
@@ -33,6 +48,11 @@ export const settingsRoutes = (deps: AppDeps) =>
         chatResetCommand:
           typeof payload.chatResetCommand === "string"
             ? payload.chatResetCommand
+            : undefined,
+        imageModelConfigs,
+        defaultImageModel:
+          typeof payload.defaultImageModel === "string"
+            ? payload.defaultImageModel
             : undefined,
         webFetchEnabled:
           typeof payload.webFetchEnabled === "boolean"

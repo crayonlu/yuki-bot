@@ -3,6 +3,7 @@ import { extname, resolve } from "node:path";
 import { OneBotWsGateway } from "./adapters/onebot/wsGateway";
 import { SessionMemoryService } from "./domain/chat/sessionMemoryService";
 import { ConfigService } from "./domain/config/configService";
+import { ImageService } from "./domain/image/imageService";
 import { LlmService } from "./domain/llm/llmService";
 import { WebFetchService } from "./domain/web/webFetchService";
 import { createHttpApp } from "./http/app";
@@ -25,6 +26,7 @@ const errorReporter = new ErrorReporter(logger);
 const configService = new ConfigService(db);
 const llmService = new LlmService(logger);
 const webFetchService = new WebFetchService(logger);
+const imageService = new ImageService(logger);
 const sessionMemoryService = new SessionMemoryService(db);
 
 let wsGateway: OneBotWsGateway;
@@ -33,6 +35,7 @@ const pluginManager = new PluginManager(
   configService,
   llmService,
   webFetchService,
+  imageService,
   sessionMemoryService,
   logger,
   async (event, text) => {

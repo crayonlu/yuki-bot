@@ -12,6 +12,7 @@
   const permissionLabels: Array<keyof PluginRuntimeState["permissions"]> = [
     "llm",
     "webFetch",
+    "imageGenerate",
     "replyPrivate",
     "replyGroup",
     "configRead",

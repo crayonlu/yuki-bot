@@ -35,6 +35,10 @@ export const pluginRoutes = (deps: AppDeps) =>
         llm: typeof payload.llm === "boolean" ? payload.llm : undefined,
         webFetch:
           typeof payload.webFetch === "boolean" ? payload.webFetch : undefined,
+        imageGenerate:
+          typeof payload.imageGenerate === "boolean"
+            ? payload.imageGenerate
+            : undefined,
         replyPrivate:
           typeof payload.replyPrivate === "boolean" ? payload.replyPrivate : undefined,
         replyGroup:

@@ -7,6 +7,11 @@ export type ProviderPreset = {
   models: string[];
 };
 
+export type ImageModelConfig = {
+  id: string;
+  endpoint: string;
+};
+
 export type BotSettings = {
   providerId: string;
   model: string;
@@ -17,6 +22,8 @@ export type BotSettings = {
   pluginTimeoutMs: number;
   memoryMaxTurns: number;
   chatResetCommand: string;
+  imageModelConfigs: ImageModelConfig[];
+  defaultImageModel: string;
   webFetchEnabled: boolean;
   webFetchTimeoutMs: number;
   webFetchMaxBytes: number;
@@ -39,6 +46,7 @@ export type OneBotMessageEvent = {
 export type PluginPermissions = {
   llm: boolean;
   webFetch: boolean;
+  imageGenerate: boolean;
   replyPrivate: boolean;
   replyGroup: boolean;
   configRead: boolean;

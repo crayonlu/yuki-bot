@@ -20,6 +20,13 @@ const DEFAULT_SETTINGS: BotSettings = {
   pluginTimeoutMs: 8000,
   memoryMaxTurns: 16,
   chatResetCommand: "/clean",
+  imageModelConfigs: [
+    {
+      id: "seedream-5.0-lite",
+      endpoint: "https://api.openai.com/v1/images/generations"
+    }
+  ],
+  defaultImageModel: "seedream-5.0-lite",
   webFetchEnabled: true,
   webFetchTimeoutMs: 12000,
   webFetchMaxBytes: 800000,
@@ -30,6 +37,7 @@ const DEFAULT_SETTINGS: BotSettings = {
 const DEFAULT_PLUGIN_PERMISSIONS: PluginPermissions = {
   llm: false,
   webFetch: false,
+  imageGenerate: false,
   replyPrivate: false,
   replyGroup: false,
   configRead: false,
@@ -164,6 +172,7 @@ export class BotDatabase {
       return {
         llm: !!parsed.llm,
         webFetch: !!parsed.webFetch,
+        imageGenerate: !!parsed.imageGenerate,
         replyPrivate: !!parsed.replyPrivate,
         replyGroup: !!parsed.replyGroup,
         configRead: !!parsed.configRead,

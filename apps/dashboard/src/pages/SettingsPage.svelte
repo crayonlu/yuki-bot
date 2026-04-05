@@ -1,26 +1,67 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import type { BotSettings, ProviderPreset } from "@bot/shared";
+  import type { BotSettings, ImageModelConfig, ProviderPreset } from "@bot/shared";
 
   let settings: BotSettings | null = null;
   let providers: ProviderPreset[] = [];
   let saving = false;
   let message = "";
   let providerOpen = false;
+  let imageModelRows: ImageModelConfig[] = [];
 
   onMount(async () => {
     const data = await api.getSettings();
     settings = data.settings;
     providers = data.providers;
+    imageModelRows = data.settings.imageModelConfigs.map((item) => ({ ...item }));
+    if (imageModelRows.length === 0) {
+      imageModelRows = [{ id: "seedream-5.0-lite", endpoint: "" }];
+    }
   });
+
+  const looksLikeHttpUrl = (value: string) => /^https?:\/\//i.test(value.trim());
+
+  const applyImageRowsToSettings = () => {
+    const current = settings;
+    if (!current) return false;
+    const deduped = new Map<string, ImageModelConfig>();
+    for (const row of imageModelRows) {
+      const id = row.id.trim();
+      const endpoint = row.endpoint.trim();
+      if (!id && !endpoint) continue;
+      if (!id || !endpoint) {
+        message = "Image model id and endpoint are both required";
+        return false;
+      }
+      if (!looksLikeHttpUrl(endpoint)) {
+        message = `Invalid endpoint for ${id}`;
+        return false;
+      }
+      deduped.set(id, { id, endpoint });
+    }
+    const nextRows = [...deduped.values()];
+    if (nextRows.length === 0) {
+      message = "At least one image model is required";
+      return false;
+    }
+    current.imageModelConfigs = nextRows;
+    if (!nextRows.some((item) => item.id === current.defaultImageModel)) {
+      current.defaultImageModel = nextRows[0].id;
+    }
+    return true;
+  };
 
   const save = async () => {
     if (!settings) return;
+    if (!applyImageRowsToSettings()) return;
     saving = true;
     try {
       const response = await api.updateSettings(settings);
       settings = response.settings;
+      imageModelRows = response.settings.imageModelConfigs.map((item: ImageModelConfig) => ({
+        ...item
+      }));
       message = "Saved";
     } catch (error) {
       message = error instanceof Error ? error.message : "Save failed";
@@ -44,6 +85,14 @@
     settings.providerId = providerId;
     providerOpen = false;
     onProviderChange();
+  };
+
+  const addImageModel = () => {
+    imageModelRows = [...imageModelRows, { id: "", endpoint: "" }];
+  };
+
+  const removeImageModel = (index: number) => {
+    imageModelRows = imageModelRows.filter((_, i) => i !== index);
   };
 
   $: selectedProviderLabel =
@@ -93,6 +142,27 @@
       API Key
       <input type="password" bind:value={settings.apiKey} />
     </label>
+    <label>
+      Default Image Model
+      <select bind:value={settings.defaultImageModel}>
+        {#each imageModelRows as row}
+          {#if row.id.trim()}
+            <option value={row.id.trim()}>{row.id.trim()}</option>
+          {/if}
+        {/each}
+      </select>
+    </label>
+    <div class="image-models">
+      <span class="title">Image Model Endpoints</span>
+      {#each imageModelRows as row, index}
+        <div class="image-row">
+          <input bind:value={row.id} placeholder="Model ID (e.g. seedream-5.0-lite)" />
+          <input bind:value={row.endpoint} placeholder="Endpoint URL" />
+          <button type="button" on:click={() => removeImageModel(index)}>Remove</button>
+        </div>
+      {/each}
+      <button type="button" on:click={addImageModel}>Add Image Model</button>
+    </div>
     <label>
       Request Timeout (ms)
       <input type="number" min="1000" step="1000" bind:value={settings.requestTimeoutMs} />
@@ -217,9 +287,26 @@
     width: 18px;
     height: 18px;
   }
+  .image-models {
+    display: grid;
+    gap: 8px;
+  }
+  .image-models .title {
+    font-size: 12px;
+    color: #475467;
+    font-weight: 600;
+  }
+  .image-row {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr auto;
+    gap: 8px;
+  }
   @media (max-width: 768px) {
     button {
       width: 100%;
+    }
+    .image-row {
+      grid-template-columns: 1fr;
     }
   }
 </style>

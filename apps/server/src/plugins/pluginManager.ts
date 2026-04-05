@@ -11,8 +11,10 @@ import type { BotDatabase } from "../infra/db/sqlite";
 import type { ConfigService } from "../domain/config/configService";
 import type { WebFetchService } from "../domain/web/webFetchService";
 import type { SessionMemoryService } from "../domain/chat/sessionMemoryService";
+import type { ImageService } from "../domain/image/imageService";
 import { echoPlugin } from "./builtin/echoPlugin";
 import { chatPlugin } from "./builtin/chatPlugin";
+import { imagePlugin } from "./builtin/imagePlugin";
 import type { BotPlugin, LoadedPlugin } from "./types";
 import type { LlmService } from "../domain/llm/llmService";
 
@@ -25,6 +27,7 @@ class PolicyDeniedError extends Error {
 const DEFAULT_PLUGIN_PERMISSIONS: PluginPermissions = {
   llm: false,
   webFetch: false,
+  imageGenerate: false,
   replyPrivate: false,
   replyGroup: false,
   configRead: false,
@@ -57,6 +60,7 @@ export class PluginManager {
     private readonly configService: ConfigService,
     private readonly llmService: LlmService,
     private readonly webFetchService: WebFetchService,
+    private readonly imageService: ImageService,
     private readonly sessionMemoryService: SessionMemoryService,
     logger: AppLogger,
     private readonly reply: ReplyFn
@@ -67,6 +71,7 @@ export class PluginManager {
   private getBuiltin(id: string): BotPlugin | undefined {
     if (id === echoPlugin.id) return echoPlugin;
     if (id === chatPlugin.id) return chatPlugin;
+    if (id === imagePlugin.id) return imagePlugin;
     return undefined;
   }
 
@@ -110,6 +115,18 @@ export class PluginManager {
         loaded: false,
         updatedAt: now,
         permissions: this.resolvePermissions(chatPlugin)
+      });
+    }
+    if (!existing.find((p) => p.id === imagePlugin.id)) {
+      this.db.upsertPlugin({
+        id: imagePlugin.id,
+        name: imagePlugin.name,
+        version: imagePlugin.version,
+        modulePath: "builtin:image",
+        enabled: true,
+        loaded: false,
+        updatedAt: now,
+        permissions: this.resolvePermissions(imagePlugin)
       });
     }
 
@@ -381,6 +398,17 @@ export class PluginManager {
               this.deny(`Plugin ${runtime.plugin.id} does not have webFetch permission`);
             }
             return this.webFetchService.fetchUrl(url, settings, traceId);
+          },
+          generateImage: async ({ prompt, modelId }) => {
+            if (!runtime.permissions.imageGenerate) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have imageGenerate permission`);
+            }
+            return this.imageService.generate({
+              prompt,
+              modelId,
+              settings,
+              traceId
+            });
           },
           getRecentHistory: (maxTurns: number) =>
             this.sessionMemoryService.getRecentHistory(event, maxTurns),
