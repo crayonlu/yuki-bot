@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.cursor
+dist
+**/dist
+build
+**/build
+.svelte-kit
+**/.svelte-kit
+apps/server/data
+*.log
