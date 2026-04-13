@@ -2,6 +2,7 @@ import type {
   BotSettings,
   ChatMessage,
   OneBotMessageEvent,
+  OneBotQuotedMessage,
   PluginPermissions,
   SettingsPayload
 } from "@bot/shared"
@@ -26,7 +27,13 @@ export type PluginMessageContext = {
   reply: (text: string) => Promise<void>
   askLlm: (text: string, extraContext?: string, history?: ChatMessage[]) => Promise<string>
   fetchUrl: (url: string) => Promise<WebFetchResult>
-  generateImage: (input: { prompt: string; modelId?: string }) => Promise<ImageGenerateResult>
+  generateImage: (input: {
+    prompt: string
+    modelId?: string
+    referenceImages?: string[]
+  }) => Promise<ImageGenerateResult>
+  fetchQuotedMessage: () => Promise<OneBotQuotedMessage | undefined>
+  forward: (contents: string[]) => Promise<void>
   getRecentHistory: (maxTurns: number) => ChatMessage[]
   appendHistoryTurn: (userText: string, assistantText: string) => void
   clearHistory: () => void

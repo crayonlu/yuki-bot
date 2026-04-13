@@ -33,14 +33,32 @@ export type BotSettings = {
 
 export type SettingsPayload = Partial<BotSettings>
 
+export type OneBotMessageSegment = {
+  type: string
+  data?: Record<string, string>
+}
+
+export type OneBotReplyRef = {
+  message_id: number | string
+}
+
 export type OneBotMessageEvent = {
   post_type: "message"
   message_type: "private" | "group"
   user_id: number
   group_id?: number
+  message_id?: number | string
+  message?: OneBotMessageSegment[]
+  reply?: OneBotReplyRef
   raw_message: string
   self_id: number
   time: number
+}
+
+export type OneBotQuotedMessage = {
+  message_id: number | string
+  raw_message: string
+  message: OneBotMessageSegment[]
 }
 
 export type PluginPermissions = {

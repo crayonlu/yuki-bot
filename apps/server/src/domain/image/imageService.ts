@@ -1,6 +1,6 @@
 import type { BotSettings } from "@bot/shared"
 import type { AppLogger } from "../../infra/logger"
-import { getImagePresetMode } from "./presets"
+import { getImagePresetMode, supportsReferenceImage } from "./presets"
 
 type ImageApiResponse = {
   images?: unknown[]
@@ -45,6 +45,7 @@ export class ImageService {
   async generate(input: {
     prompt: string
     modelId?: string
+    referenceImages?: string[]
     settings: BotSettings
     traceId: string
   }): Promise<{ modelId: string; imageUrls: string[] }> {
@@ -63,7 +64,7 @@ export class ImageService {
     const timeout = setTimeout(() => controller.abort(), settings.requestTimeoutMs)
 
     try {
-      const payload = this.buildPayload(modelId, prompt)
+      const payload = this.buildPayload(modelId, prompt, input.referenceImages ?? [])
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -105,11 +106,17 @@ export class ImageService {
     }
   }
 
-  private buildPayload(modelId: string, prompt: string) {
+  private buildPayload(modelId: string, prompt: string, referenceImages: string[]) {
+    const canUseReference = supportsReferenceImage(modelId)
+    const refs = canUseReference
+      ? [...new Set(referenceImages.map((item) => item.trim()).filter(Boolean))]
+      : []
+
     if (modelId === "seedream-5.0-lite") {
       return {
         prompt,
         size: "2048x2048",
+        image: refs.slice(0, 14),
         watermark: false,
         optimize_prompt_options: { mode: "standard" },
         sequential_image_generation: "disabled"
@@ -129,6 +136,13 @@ export class ImageService {
       return {
         prompt,
         size: "1024*1024",
+        watermark: false
+      }
+    }
+    if (modelId === "qwen-image-edit") {
+      return {
+        prompt,
+        image: refs[0],
         watermark: false
       }
     }

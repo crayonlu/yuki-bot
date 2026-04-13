@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url"
 import type {
   ChatMessage,
   OneBotMessageEvent,
+  OneBotQuotedMessage,
   PluginPermissions,
   PluginRuntimeState
 } from "@bot/shared"
@@ -19,6 +20,8 @@ import { imagePlugin } from "./builtin/imagePlugin"
 import type { BotPlugin, LoadedPlugin } from "./types"
 
 type ReplyFn = (event: OneBotMessageEvent, text: string) => Promise<void>
+type QuoteFetchFn = (messageId: number | string) => Promise<OneBotQuotedMessage | undefined>
+type ForwardFn = (event: OneBotMessageEvent, contents: string[]) => Promise<void>
 
 class PolicyDeniedError extends Error {
   code = "policy_denied" as const
@@ -60,7 +63,9 @@ export class PluginManager {
     private readonly imageService: ImageService,
     private readonly sessionMemoryService: SessionMemoryService,
     logger: AppLogger,
-    private readonly reply: ReplyFn
+    private readonly reply: ReplyFn,
+    private readonly fetchQuotedMessage: QuoteFetchFn,
+    private readonly forwardReply: ForwardFn
   ) {
     this.log = logger.child("plugin-manager")
   }
@@ -386,16 +391,31 @@ export class PluginManager {
             }
             return this.webFetchService.fetchUrl(url, settings, traceId)
           },
-          generateImage: async ({ prompt, modelId }) => {
+          generateImage: async ({ prompt, modelId, referenceImages }) => {
             if (!runtime.permissions.imageGenerate) {
               this.deny(`Plugin ${runtime.plugin.id} does not have imageGenerate permission`)
             }
             return this.imageService.generate({
               prompt,
               modelId,
+              referenceImages,
               settings,
               traceId
             })
+          },
+          fetchQuotedMessage: () => {
+            const messageId = event.reply?.message_id
+            if (messageId === undefined) return Promise.resolve(undefined)
+            return this.fetchQuotedMessage(messageId)
+          },
+          forward: async (contents: string[]) => {
+            if (event.message_type === "private" && !runtime.permissions.replyPrivate) {
+              this.deny(`Plugin ${runtime.plugin.id} has no replyPrivate permission`)
+            }
+            if (event.message_type === "group" && !runtime.permissions.replyGroup) {
+              this.deny(`Plugin ${runtime.plugin.id} has no replyGroup permission`)
+            }
+            await this.forwardReply(event, contents)
           },
           getRecentHistory: (maxTurns: number) =>
             this.sessionMemoryService.getRecentHistory(event, maxTurns),

@@ -41,6 +41,12 @@ const pluginManager = new PluginManager(
   logger,
   async (event, text) => {
     await wsGateway.replyTo(event, text)
+  },
+  async (messageId) => {
+    return wsGateway.getMessageById(messageId)
+  },
+  async (event, contents) => {
+    await wsGateway.sendForward(event, contents)
   }
 )
 wsGateway = new OneBotWsGateway(logger, async (event, traceId) => {
