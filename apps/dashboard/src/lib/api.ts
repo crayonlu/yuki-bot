@@ -14,6 +14,17 @@ export const api = {
       body: JSON.stringify(payload)
     }).then((r) => r.json())
   },
+  async listRemoteModels(input: { apiBaseUrl?: string; apiKey?: string }) {
+    return fetch("/api/settings/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    }).then((r) => r.json()) as Promise<{
+      ok: boolean
+      error?: string
+      models: Array<{ id: string; displayName: string; endpoints: string[]; modelType: string }>
+    }>
+  },
   async listPlugins(): Promise<{ plugins: PluginRuntimeState[] }> {
     return fetch("/api/plugins").then((r) => r.json())
   },

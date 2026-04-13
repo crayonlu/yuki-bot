@@ -1,7 +1,17 @@
 import type { BotSettings } from "@bot/shared"
 import type { AppLogger } from "../../infra/logger"
+import { getImagePresetMode } from "./presets"
 
 type ImageApiResponse = {
+  images?: unknown[]
+  task_id?: string
+}
+
+type AsyncTaskResponse = {
+  task?: {
+    status?: string
+    reason?: string
+  }
   images?: unknown[]
 }
 
@@ -16,6 +26,13 @@ const extractImageUrl = (item: unknown): string | undefined => {
     if (typeof nested.url === "string") return nested.url
   }
   return undefined
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const getAsyncTaskResultEndpoint = (requestEndpoint: string) => {
+  const parsed = new URL(requestEndpoint)
+  return `${parsed.origin}/v3/async/task-result`
 }
 
 export class ImageService {
@@ -41,10 +58,12 @@ export class ImageService {
       throw new Error(`Unknown image model: ${modelId}`)
     }
     const endpoint = modelConfig.endpoint.trim()
+    const mode = getImagePresetMode(modelId)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), settings.requestTimeoutMs)
 
     try {
+      const payload = this.buildPayload(modelId, prompt)
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -52,12 +71,7 @@ export class ImageService {
           Authorization: `Bearer ${settings.apiKey}`
         },
         signal: controller.signal,
-        body: JSON.stringify({
-          model: modelId,
-          prompt,
-          size: "2048x2048",
-          watermark: false
-        })
+        body: JSON.stringify(payload)
       })
       if (!response.ok) {
         const reason = await response.text()
@@ -65,9 +79,12 @@ export class ImageService {
       }
 
       const data = (await response.json()) as ImageApiResponse
-      const imageUrls = (data.images ?? [])
-        .map((item) => extractImageUrl(item))
-        .filter((value): value is string => !!value)
+      const imageUrls =
+        mode === "async"
+          ? await this.waitForAsyncImages(endpoint, data.task_id, settings.apiKey)
+          : (data.images ?? [])
+              .map((item) => extractImageUrl(item))
+              .filter((value): value is string => !!value)
       if (imageUrls.length === 0) {
         throw new Error("image response is empty")
       }
@@ -86,5 +103,94 @@ export class ImageService {
     } finally {
       clearTimeout(timeout)
     }
+  }
+
+  private buildPayload(modelId: string, prompt: string) {
+    if (modelId === "seedream-5.0-lite") {
+      return {
+        prompt,
+        size: "2048x2048",
+        watermark: false,
+        optimize_prompt_options: { mode: "standard" },
+        sequential_image_generation: "disabled"
+      }
+    }
+    if (modelId === "jimeng-3.1") {
+      return {
+        prompt,
+        use_pre_llm: true,
+        seed: -1,
+        logo_info: {
+          add_logo: false
+        }
+      }
+    }
+    if (modelId === "qwen-image-txt2img") {
+      return {
+        prompt,
+        size: "1024*1024",
+        watermark: false
+      }
+    }
+    if (modelId === "z-image-turbo-lora") {
+      return {
+        prompt,
+        size: "1024*1024",
+        seed: -1,
+        loras: []
+      }
+    }
+    if (modelId === "z-image-turbo") {
+      return {
+        prompt,
+        size: "1024*1024",
+        seed: -1,
+        enable_base64_output: false
+      }
+    }
+    return {
+      model: modelId,
+      prompt,
+      size: "1024*1024",
+      watermark: false
+    }
+  }
+
+  private async waitForAsyncImages(
+    requestEndpoint: string,
+    taskId: string | undefined,
+    apiKey: string
+  ): Promise<string[]> {
+    if (!taskId) {
+      throw new Error("async image task_id is empty")
+    }
+    const taskEndpoint = getAsyncTaskResultEndpoint(requestEndpoint)
+    const maxAttempts = 40
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (attempt > 0) {
+        await sleep(1500)
+      }
+      const query = `${taskEndpoint}?task_id=${encodeURIComponent(taskId)}`
+      const response = await fetch(query, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        }
+      })
+      if (!response.ok) {
+        const reason = await response.text()
+        throw new Error(`async task query failed(${response.status}): ${reason}`)
+      }
+      const data = (await response.json()) as AsyncTaskResponse
+      const status = data.task?.status ?? ""
+      if (status === "TASK_STATUS_SUCCEED") {
+        return (data.images ?? [])
+          .map((item) => extractImageUrl(item))
+          .filter((value): value is string => !!value)
+      }
+      if (status === "TASK_STATUS_FAILED") {
+        throw new Error(data.task?.reason || "image async task failed")
+      }
+    }
+    throw new Error("image async task timeout")
   }
 }

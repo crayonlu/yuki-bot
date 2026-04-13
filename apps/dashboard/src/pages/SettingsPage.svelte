@@ -9,6 +9,8 @@
   let message = "";
   let providerOpen = false;
   let imageModelRows: ImageModelConfig[] = [];
+  let remoteModels: Array<{ id: string; displayName: string }> = [];
+  let loadingModels = false;
 
   onMount(async () => {
     const data = await api.getSettings();
@@ -18,7 +20,35 @@
     if (imageModelRows.length === 0) {
       imageModelRows = [{ id: "seedream-5.0-lite", endpoint: "" }];
     }
+    await loadRemoteModels();
   });
+
+  const loadRemoteModels = async () => {
+    const current = settings;
+    if (!current) return;
+    loadingModels = true;
+    try {
+      const result = await api.listRemoteModels({
+        apiBaseUrl: current.apiBaseUrl,
+        apiKey: current.apiKey
+      });
+      if (!result.ok) {
+        message = result.error ?? "Load models failed";
+        return;
+      }
+      remoteModels = result.models.map((item) => ({
+        id: item.id,
+        displayName: item.displayName
+      }));
+      if (!remoteModels.some((item) => item.id === current.model) && remoteModels[0]) {
+        current.model = remoteModels[0].id;
+      }
+    } catch (error) {
+      message = error instanceof Error ? error.message : "Load models failed";
+    } finally {
+      loadingModels = false;
+    }
+  };
 
   const looksLikeHttpUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 
@@ -78,6 +108,7 @@
     if (!settings.model.trim()) {
       settings.model = selected.models[0] ?? settings.model;
     }
+    void loadRemoteModels();
   };
 
   const selectProvider = (providerId: string) => {
@@ -132,7 +163,21 @@
     </label>
     <label>
       Model
-      <input bind:value={settings.model} placeholder="gpt-4o-mini" />
+      <div class="model-row">
+        <select bind:value={settings.model}>
+          {#if remoteModels.length === 0}
+            <option value={settings.model}>{settings.model || "No models loaded"}</option>
+          {:else}
+            {#each remoteModels as model}
+              <option value={model.id}>{model.displayName} ({model.id})</option>
+            {/each}
+          {/if}
+        </select>
+        <button type="button" on:click={loadRemoteModels} disabled={loadingModels}>
+          {loadingModels ? "Loading..." : "Refresh"}
+        </button>
+      </div>
+      <input bind:value={settings.model} placeholder="Custom model id (optional)" />
     </label>
     <label>
       API Base URL
@@ -301,9 +346,17 @@
     grid-template-columns: 1fr 1.5fr auto;
     gap: 8px;
   }
+  .model-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
   @media (max-width: 768px) {
     button {
       width: 100%;
+    }
+    .model-row {
+      grid-template-columns: 1fr;
     }
     .image-row {
       grid-template-columns: 1fr;

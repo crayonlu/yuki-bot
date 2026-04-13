@@ -9,6 +9,7 @@ import type {
   PluginPermissions,
   PluginRuntimeState
 } from "@bot/shared"
+import { BUILTIN_IMAGE_CONFIGS } from "../../domain/image/presets"
 
 const DEFAULT_SETTINGS: BotSettings = {
   providerId: "openai",
@@ -17,15 +18,10 @@ const DEFAULT_SETTINGS: BotSettings = {
   apiKey: "",
   systemPrompt: "You are a helpful QQ assistant.",
   requestTimeoutMs: 30000,
-  pluginTimeoutMs: 8000,
+  pluginTimeoutMs: 120000,
   memoryMaxTurns: 16,
   chatResetCommand: "/clean",
-  imageModelConfigs: [
-    {
-      id: "seedream-5.0-lite",
-      endpoint: "https://api.openai.com/v1/images/generations"
-    }
-  ],
+  imageModelConfigs: BUILTIN_IMAGE_CONFIGS.map((item) => ({ ...item })),
   defaultImageModel: "seedream-5.0-lite",
   webFetchEnabled: true,
   webFetchTimeoutMs: 12000,

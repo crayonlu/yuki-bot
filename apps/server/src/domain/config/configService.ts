@@ -1,5 +1,6 @@
 import type { BotSettings, SettingsPayload } from "@bot/shared"
 import type { BotDatabase } from "../../infra/db/sqlite"
+import { BUILTIN_IMAGE_CONFIGS } from "../image/presets"
 import { findProviderById, PROVIDER_PRESETS } from "./providerRegistry"
 
 const isHttpUrl = (value: string) => {
@@ -15,7 +16,22 @@ export class ConfigService {
   constructor(private readonly db: BotDatabase) {}
 
   getSettings(): BotSettings {
-    return this.db.getSettings()
+    const current = this.db.getSettings()
+    const mergedImageConfigs = [...BUILTIN_IMAGE_CONFIGS, ...current.imageModelConfigs]
+      .filter((item) => item.id && item.endpoint)
+      .reduce<{ id: string; endpoint: string }[]>((acc, item) => {
+        if (acc.some((saved) => saved.id === item.id)) return acc
+        acc.push(item)
+        return acc
+      }, [])
+    const nextDefault = mergedImageConfigs.some((item) => item.id === current.defaultImageModel)
+      ? current.defaultImageModel
+      : mergedImageConfigs[0]?.id || "seedream-5.0-lite"
+    return {
+      ...current,
+      imageModelConfigs: mergedImageConfigs,
+      defaultImageModel: nextDefault
+    }
   }
 
   updateSettings(payload: SettingsPayload): BotSettings {

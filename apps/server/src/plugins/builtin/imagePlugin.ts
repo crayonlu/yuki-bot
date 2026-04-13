@@ -18,8 +18,12 @@ const parseCommand = (content: string) => {
     const [, modelId, prompt] = matched
     return { ok: true as const, modelId, prompt: prompt.trim() }
   }
+  if (body.startsWith("--bench")) {
+    const prompt = body.slice("--bench".length).trim()
+    return { ok: true as const, bench: true, prompt }
+  }
 
-  return { ok: true as const, modelId: undefined, prompt: body }
+  return { ok: true as const, modelId: undefined, bench: false, prompt: body }
 }
 
 const getHelpWithModelMap = (modelIds: string[]) => {
@@ -28,6 +32,7 @@ const getHelpWithModelMap = (modelIds: string[]) => {
     "Usage:",
     "- /image <prompt>",
     "- /image --model <id|index> <prompt>",
+    "- /image --bench <prompt>   (run all configured models)",
     "",
     "Model map:",
     ...lines
@@ -71,6 +76,32 @@ export const imagePlugin: BotPlugin = {
 
     if (!parsed.prompt) {
       await context.reply(helpText)
+      return
+    }
+
+    if (parsed.bench) {
+      if (context.settings.pluginTimeoutMs < 60000) {
+        await context.reply(
+          `Warning: pluginTimeoutMs=${context.settings.pluginTimeoutMs} may be too small for --bench.`
+        )
+      }
+      await context.reply(`Bench start: ${available.length} model(s)`)
+      for (const modelId of available) {
+        try {
+          const result = await context.generateImage({
+            modelId,
+            prompt: parsed.prompt
+          })
+          await context.reply(`Model: ${result.modelId}`)
+          for (const imageUrl of result.imageUrls.slice(0, 2)) {
+            await context.reply(`[CQ:image,file=${imageUrl}]`)
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          await context.reply(`Model ${modelId} failed: ${message}`)
+        }
+      }
+      await context.reply("Bench done.")
       return
     }
 

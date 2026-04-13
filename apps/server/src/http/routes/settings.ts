@@ -1,12 +1,81 @@
 import { Elysia } from "elysia"
 import type { AppDeps } from "../types"
 
+type RemoteModelItem = {
+  id: string
+  displayName: string
+  endpoints: string[]
+  modelType: string
+}
+
+const normalizeBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, "")
+
 export const settingsRoutes = (deps: AppDeps) =>
   new Elysia({ prefix: "/api/settings" })
     .get("/", () => ({
       settings: deps.configService.getSettings(),
       providers: deps.configService.listProviderPresets()
     }))
+    .post("/models", async ({ body }) => {
+      const payload = (body ?? {}) as Record<string, unknown>
+      const current = deps.configService.getSettings()
+      const apiBaseUrl =
+        typeof payload.apiBaseUrl === "string" && payload.apiBaseUrl.trim()
+          ? payload.apiBaseUrl.trim()
+          : current.apiBaseUrl
+      const apiKey =
+        typeof payload.apiKey === "string" && payload.apiKey.trim()
+          ? payload.apiKey.trim()
+          : current.apiKey
+
+      if (!apiBaseUrl) {
+        return { ok: false, error: "apiBaseUrl is required", models: [] }
+      }
+      if (!apiKey) {
+        return { ok: false, error: "apiKey is required", models: [] }
+      }
+
+      const endpoint = `${normalizeBaseUrl(apiBaseUrl)}/models`
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        }
+      })
+      if (!response.ok) {
+        const reason = await response.text()
+        return {
+          ok: false,
+          error: `list models failed(${response.status}): ${reason}`,
+          models: []
+        }
+      }
+
+      const data = (await response.json()) as {
+        data?: Array<{
+          id?: string
+          display_name?: string
+          title?: string
+          endpoints?: string[]
+          model_type?: string
+        }>
+      }
+      const models: RemoteModelItem[] = (data.data ?? [])
+        .filter((item) => typeof item.id === "string" && !!item.id)
+        .map((item) => ({
+          id: item.id as string,
+          displayName:
+            (typeof item.display_name === "string" && item.display_name) ||
+            (typeof item.title === "string" && item.title) ||
+            (item.id as string),
+          endpoints: Array.isArray(item.endpoints)
+            ? item.endpoints.filter((v): v is string => typeof v === "string")
+            : [],
+          modelType: typeof item.model_type === "string" ? item.model_type : "unknown"
+        }))
+        .filter((item) => item.modelType === "chat" || item.endpoints.includes("chat/completions"))
+
+      return { ok: true, models }
+    })
     .put("/", ({ body }) => {
       const payload = (body ?? {}) as Record<string, unknown>
       const imageModelConfigs = Array.isArray(payload.imageModelConfigs)
