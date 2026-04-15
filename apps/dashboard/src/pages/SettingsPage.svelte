@@ -256,6 +256,66 @@
         bind:value={settings.webFetchMaxUrlsPerMessage}
       />
     </label>
+    <label class="switch-row">
+      <span>Web Search Enabled</span>
+      <input type="checkbox" bind:checked={settings.webSearchEnabled} />
+    </label>
+    <label>
+      Web Search Timeout (ms)
+      <input type="number" min="1000" step="1000" bind:value={settings.webSearchTimeoutMs} />
+    </label>
+    <label>
+      Web Search Max Calls Per Message
+      <input
+        type="number"
+        min="1"
+        max="10"
+        step="1"
+        bind:value={settings.webSearchMaxCallsPerMessage}
+      />
+    </label>
+    <label>
+      Web Search Count Per Call
+      <input type="number" min="1" max="50" step="1" bind:value={settings.webSearchCountPerCall} />
+    </label>
+    <label>
+      Web Search Freshness
+      <select bind:value={settings.webSearchFreshness}>
+        <option value="noLimit">noLimit</option>
+        <option value="oneDay">oneDay</option>
+        <option value="oneWeek">oneWeek</option>
+        <option value="oneMonth">oneMonth</option>
+        <option value="oneYear">oneYear</option>
+      </select>
+    </label>
+    <label class="switch-row">
+      <span>Web Search Summary</span>
+      <input type="checkbox" bind:checked={settings.webSearchSummary} />
+    </label>
+    <label class="switch-row">
+      <span>Vision Enabled</span>
+      <input type="checkbox" bind:checked={settings.visionEnabled} />
+    </label>
+    <label>
+      Vision Model
+      <input bind:value={settings.visionModel} placeholder="e.g. qwen/qwen2.5-vl-72b-instruct" />
+    </label>
+    <label>
+      Vision Detail
+      <select bind:value={settings.visionDetail}>
+        <option value="auto">auto</option>
+        <option value="low">low</option>
+        <option value="high">high</option>
+      </select>
+    </label>
+    <label>
+      Vision Summary Max Chars
+      <input type="number" min="100" max="4000" step="50" bind:value={settings.visionSummaryMaxChars} />
+    </label>
+    <label>
+      Vision Evidence Lookback
+      <input type="number" min="1" max="10" step="1" bind:value={settings.visionEvidenceLookback} />
+    </label>
     <label>
       System Prompt
       <textarea rows="6" bind:value={settings.systemPrompt}></textarea>

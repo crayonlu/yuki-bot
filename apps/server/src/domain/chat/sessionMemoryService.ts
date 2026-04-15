@@ -26,5 +26,27 @@ export class SessionMemoryService {
   clear(event: OneBotMessageEvent): void {
     const sessionKey = this.getSessionKey(event)
     this.db.clearSessionMessages(sessionKey)
+    this.db.clearVisionEvidences(sessionKey)
+  }
+
+  appendVisionEvidence(
+    event: OneBotMessageEvent,
+    input: {
+      messageId?: string
+      imageUrls: string[]
+      summary: string
+      details?: string
+    }
+  ): void {
+    const sessionKey = this.getSessionKey(event)
+    this.db.appendVisionEvidence({
+      sessionKey,
+      ...input
+    })
+  }
+
+  getRecentVisionEvidences(event: OneBotMessageEvent, limit: number) {
+    const sessionKey = this.getSessionKey(event)
+    return this.db.listVisionEvidences(sessionKey, limit)
   }
 }

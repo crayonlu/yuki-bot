@@ -123,6 +123,36 @@ export const settingsRoutes = (deps: AppDeps) =>
         webFetchMaxUrlsPerMessage:
           typeof payload.webFetchMaxUrlsPerMessage === "number"
             ? payload.webFetchMaxUrlsPerMessage
+            : undefined,
+        webSearchEnabled:
+          typeof payload.webSearchEnabled === "boolean" ? payload.webSearchEnabled : undefined,
+        webSearchTimeoutMs:
+          typeof payload.webSearchTimeoutMs === "number" ? payload.webSearchTimeoutMs : undefined,
+        webSearchMaxCallsPerMessage:
+          typeof payload.webSearchMaxCallsPerMessage === "number"
+            ? payload.webSearchMaxCallsPerMessage
+            : undefined,
+        webSearchCountPerCall:
+          typeof payload.webSearchCountPerCall === "number"
+            ? payload.webSearchCountPerCall
+            : undefined,
+        webSearchFreshness:
+          typeof payload.webSearchFreshness === "string" ? payload.webSearchFreshness : undefined,
+        webSearchSummary:
+          typeof payload.webSearchSummary === "boolean" ? payload.webSearchSummary : undefined,
+        visionEnabled: typeof payload.visionEnabled === "boolean" ? payload.visionEnabled : undefined,
+        visionModel: typeof payload.visionModel === "string" ? payload.visionModel : undefined,
+        visionDetail:
+          payload.visionDetail === "auto" || payload.visionDetail === "low" || payload.visionDetail === "high"
+            ? payload.visionDetail
+            : undefined,
+        visionSummaryMaxChars:
+          typeof payload.visionSummaryMaxChars === "number"
+            ? payload.visionSummaryMaxChars
+            : undefined,
+        visionEvidenceLookback:
+          typeof payload.visionEvidenceLookback === "number"
+            ? payload.visionEvidenceLookback
             : undefined
       })
       return { settings: updated }

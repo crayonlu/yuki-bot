@@ -21,12 +21,66 @@ export type ImageGenerateResult = {
   imageUrls: string[]
 }
 
+export type WebSearchItem = {
+  title: string
+  url: string
+  snippet?: string
+  summary?: string
+  siteName?: string
+  datePublished?: string
+}
+
+export type WebSearchResult = {
+  query: string
+  items: WebSearchItem[]
+}
+
+export type VisionAnalyzeResult = {
+  summary: string
+  details: {
+    objects?: string[]
+    texts?: string[]
+    scene?: string
+    warnings?: string[]
+    confidence?: "low" | "medium" | "high"
+  }
+  latencyMs: number
+}
+
+export type VisionEvidence = {
+  id: number
+  messageId?: string
+  imageUrls: string[]
+  summary: string
+  details?: string
+  ts: number
+}
+
+export type ToolPlanResult = {
+  useWebSearch: boolean
+  webSearchQuery?: string
+  useVision: boolean
+  visionMode?: "current" | "recent"
+  visionQuery?: string
+  reason?: string
+}
+
 export type PluginMessageContext = {
   traceId: string
   settings: BotSettings
   reply: (text: string) => Promise<void>
   askLlm: (text: string, extraContext?: string, history?: ChatMessage[]) => Promise<string>
+  planTools: (input: {
+    userText: string
+    history?: ChatMessage[]
+    hasCurrentImages: boolean
+    hasRecentVisionEvidence: boolean
+    executedTools?: string[]
+    contextPreview?: string
+  }) => Promise<ToolPlanResult>
   fetchUrl: (url: string) => Promise<WebFetchResult>
+  searchWeb: (input: { query: string }) => Promise<WebSearchResult>
+  analyzeVision: (input: { query: string; imageUrls: string[] }) => Promise<VisionAnalyzeResult>
   generateImage: (input: {
     prompt: string
     modelId?: string
@@ -36,6 +90,13 @@ export type PluginMessageContext = {
   forward: (contents: string[]) => Promise<void>
   getRecentHistory: (maxTurns: number) => ChatMessage[]
   appendHistoryTurn: (userText: string, assistantText: string) => void
+  appendVisionEvidence: (input: {
+    messageId?: string
+    imageUrls: string[]
+    summary: string
+    details?: string
+  }) => void
+  getRecentVisionEvidences: (limit: number) => VisionEvidence[]
   clearHistory: () => void
   getSettings: () => BotSettings
   updateSettings: (payload: SettingsPayload) => BotSettings

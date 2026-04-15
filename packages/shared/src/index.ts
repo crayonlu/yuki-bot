@@ -12,6 +12,14 @@ export type ImageModelConfig = {
   endpoint: string
 }
 
+export type WebSearchFreshness =
+  | "noLimit"
+  | "oneDay"
+  | "oneWeek"
+  | "oneMonth"
+  | "oneYear"
+  | string
+
 export type BotSettings = {
   providerId: string
   model: string
@@ -29,6 +37,17 @@ export type BotSettings = {
   webFetchMaxBytes: number
   webFetchMaxRedirects: number
   webFetchMaxUrlsPerMessage: number
+  webSearchEnabled: boolean
+  webSearchTimeoutMs: number
+  webSearchMaxCallsPerMessage: number
+  webSearchCountPerCall: number
+  webSearchFreshness: WebSearchFreshness
+  webSearchSummary: boolean
+  visionEnabled: boolean
+  visionModel: string
+  visionDetail: "auto" | "low" | "high"
+  visionSummaryMaxChars: number
+  visionEvidenceLookback: number
 }
 
 export type SettingsPayload = Partial<BotSettings>
@@ -64,6 +83,8 @@ export type OneBotQuotedMessage = {
 export type PluginPermissions = {
   llm: boolean
   webFetch: boolean
+  webSearch: boolean
+  visionAnalyze: boolean
   imageGenerate: boolean
   replyPrivate: boolean
   replyGroup: boolean

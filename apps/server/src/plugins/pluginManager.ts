@@ -11,6 +11,8 @@ import type { SessionMemoryService } from "../domain/chat/sessionMemoryService"
 import type { ConfigService } from "../domain/config/configService"
 import type { ImageService } from "../domain/image/imageService"
 import type { LlmService } from "../domain/llm/llmService"
+import type { VisionService } from "../domain/vision/visionService"
+import type { WebSearchService } from "../domain/web/webSearchService"
 import type { WebFetchService } from "../domain/web/webFetchService"
 import type { BotDatabase } from "../infra/db/sqlite"
 import type { AppLogger } from "../infra/logger"
@@ -30,6 +32,8 @@ class PolicyDeniedError extends Error {
 const DEFAULT_PLUGIN_PERMISSIONS: PluginPermissions = {
   llm: false,
   webFetch: false,
+  webSearch: false,
+  visionAnalyze: false,
   imageGenerate: false,
   replyPrivate: false,
   replyGroup: false,
@@ -60,6 +64,8 @@ export class PluginManager {
     private readonly configService: ConfigService,
     private readonly llmService: LlmService,
     private readonly webFetchService: WebFetchService,
+    private readonly webSearchService: WebSearchService,
+    private readonly visionService: VisionService,
     private readonly imageService: ImageService,
     private readonly sessionMemoryService: SessionMemoryService,
     logger: AppLogger,
@@ -385,11 +391,54 @@ export class PluginManager {
               traceId
             })
           },
+          planTools: async ({
+            userText,
+            history,
+            hasCurrentImages,
+            hasRecentVisionEvidence,
+            executedTools,
+            contextPreview
+          }) => {
+            if (!runtime.permissions.llm) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have llm permission`)
+            }
+            return this.llmService.planTools({
+              userText,
+              history,
+              hasCurrentImages,
+              hasRecentVisionEvidence,
+              executedTools,
+              contextPreview,
+              settings,
+              traceId
+            })
+          },
           fetchUrl: async (url: string) => {
             if (!runtime.permissions.webFetch) {
               this.deny(`Plugin ${runtime.plugin.id} does not have webFetch permission`)
             }
             return this.webFetchService.fetchUrl(url, settings, traceId)
+          },
+          searchWeb: async ({ query }) => {
+            if (!runtime.permissions.webSearch) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have webSearch permission`)
+            }
+            return this.webSearchService.search({
+              query,
+              settings,
+              traceId
+            })
+          },
+          analyzeVision: async ({ query, imageUrls }) => {
+            if (!runtime.permissions.visionAnalyze) {
+              this.deny(`Plugin ${runtime.plugin.id} does not have visionAnalyze permission`)
+            }
+            return this.visionService.analyze({
+              query,
+              imageUrls,
+              settings,
+              traceId
+            })
           },
           generateImage: async ({ prompt, modelId, referenceImages }) => {
             if (!runtime.permissions.imageGenerate) {
@@ -421,6 +470,9 @@ export class PluginManager {
             this.sessionMemoryService.getRecentHistory(event, maxTurns),
           appendHistoryTurn: (userText: string, assistantText: string) =>
             this.sessionMemoryService.appendTurn(event, userText, assistantText),
+          appendVisionEvidence: (input) => this.sessionMemoryService.appendVisionEvidence(event, input),
+          getRecentVisionEvidences: (limit: number) =>
+            this.sessionMemoryService.getRecentVisionEvidences(event, limit),
           clearHistory: () => this.sessionMemoryService.clear(event),
           getSettings: () => {
             if (!runtime.permissions.configRead) {

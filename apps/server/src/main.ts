@@ -5,6 +5,8 @@ import { SessionMemoryService } from "./domain/chat/sessionMemoryService"
 import { ConfigService } from "./domain/config/configService"
 import { ImageService } from "./domain/image/imageService"
 import { LlmService } from "./domain/llm/llmService"
+import { VisionService } from "./domain/vision/visionService"
+import { WebSearchService } from "./domain/web/webSearchService"
 import { WebFetchService } from "./domain/web/webFetchService"
 import { createHttpApp } from "./http/app"
 import { BotDatabase } from "./infra/db/sqlite"
@@ -27,6 +29,8 @@ const errorReporter = new ErrorReporter(logger)
 const configService = new ConfigService(db)
 const llmService = new LlmService(logger)
 const webFetchService = new WebFetchService(logger)
+const webSearchService = new WebSearchService(logger)
+const visionService = new VisionService(logger)
 const imageService = new ImageService(logger)
 const sessionMemoryService = new SessionMemoryService(db)
 
@@ -36,6 +40,8 @@ const pluginManager = new PluginManager(
   configService,
   llmService,
   webFetchService,
+  webSearchService,
+  visionService,
   imageService,
   sessionMemoryService,
   logger,

@@ -7,6 +7,48 @@ const URL_REGEX = /https?:\/\/[^\s<>"'`]+/gi
 
 const extractUrls = (text: string) => Array.from(new Set(text.match(URL_REGEX) ?? []))
 
+const extractFromMessageSegments = (
+  segments: { type: string; data?: Record<string, string> }[] | undefined
+) =>
+  (segments ?? [])
+    .filter((segment) => segment.type === "image")
+    .flatMap((segment) => {
+      const url = segment.data?.url?.trim()
+      const file = segment.data?.file?.trim()
+      return [url, file].filter((item): item is string => !!item)
+    })
+
+const extractFromRawMessage = (rawMessage: string) => {
+  const matches = rawMessage.match(/\[CQ:image,[^\]]+\]/g) ?? []
+  const values: string[] = []
+  for (const token of matches) {
+    const url = token.match(/url=([^,\]]+)/)?.[1]
+    const file = token.match(/file=([^,\]]+)/)?.[1]
+    if (url) values.push(url)
+    if (file) values.push(file)
+  }
+  return values
+}
+
+const collectMessageImages = async (
+  event: { raw_message: string; message?: { type: string; data?: Record<string, string> }[] },
+  fetchQuotedMessage: () => Promise<
+    | {
+        raw_message: string
+        message: { type: string; data?: Record<string, string> }[]
+      }
+    | undefined
+  >
+) => {
+  const current = extractFromMessageSegments(event.message)
+  const raw = extractFromRawMessage(event.raw_message)
+  const quoted = await fetchQuotedMessage()
+  const quotedImages = quoted
+    ? [...extractFromMessageSegments(quoted.message), ...extractFromRawMessage(quoted.raw_message)]
+    : []
+  return [...new Set([...current, ...raw, ...quotedImages])]
+}
+
 export const chatPlugin: BotPlugin = {
   id: "builtin.chat",
   name: "Chat Plugin",
@@ -16,6 +58,8 @@ export const chatPlugin: BotPlugin = {
   permissions: {
     llm: true,
     webFetch: true,
+    webSearch: true,
+    visionAnalyze: true,
     replyPrivate: true,
     replyGroup: true,
     configRead: true
@@ -24,6 +68,7 @@ export const chatPlugin: BotPlugin = {
     const content = event.raw_message.trim()
     if (!content) return
     const urls = extractUrls(content)
+    const messageImages = await collectMessageImages(event, context.fetchQuotedMessage)
     const resetCommand = context.settings.chatResetCommand || "/clean"
 
     if (content === resetCommand) {
@@ -39,7 +84,9 @@ export const chatPlugin: BotPlugin = {
     }
 
     const isAskCommand = content.startsWith("/ask ")
-    const question = isAskCommand ? content.slice("/ask ".length).trim() : content
+    const askPayload = isAskCommand ? content.slice("/ask ".length).trim() : content
+    const forceWeb = askPayload.startsWith("--web ")
+    const question = forceWeb ? askPayload.slice("--web ".length).trim() : askPayload
     if (!question) {
       await context.reply(HELP_TEXT)
       return
@@ -47,7 +94,197 @@ export const chatPlugin: BotPlugin = {
 
     context.log("Dispatching ask to llm", { preview: question.slice(0, 100) })
     try {
+      const history = context.getRecentHistory(context.settings.memoryMaxTurns)
+      const recentEvidences = context.getRecentVisionEvidences(
+        Math.max(1, context.settings.visionEvidenceLookback)
+      )
+      const latestEvidence = recentEvidences.find((item) => item.imageUrls.length > 0)
       const webContextBlocks: string[] = []
+      const searchContextBlocks: string[] = []
+      const visionContextBlocks: string[] = []
+      let visionSummaryForMemory = ""
+      const executedTools: string[] = []
+      const maxPlanningSteps = 3
+      for (let step = 0; step < maxPlanningSteps; step += 1) {
+        const contextPreview = [...visionContextBlocks, ...searchContextBlocks, ...webContextBlocks]
+          .join("\n\n---\n\n")
+          .slice(0, 1600)
+        const toolPlan = await context.planTools({
+          userText: question,
+          history,
+          hasCurrentImages: messageImages.length > 0,
+          hasRecentVisionEvidence: !!latestEvidence,
+          executedTools,
+          contextPreview: contextPreview || undefined
+        })
+        if (forceWeb && !executedTools.includes("webSearch")) {
+          toolPlan.useWebSearch = true
+        }
+        context.log("Tool planning completed", {
+          step: step + 1,
+          use_web_search: toolPlan.useWebSearch,
+          use_vision: toolPlan.useVision,
+          vision_mode: toolPlan.visionMode,
+          executed_tools: executedTools.join(",") || "none",
+          reason: toolPlan.reason
+        })
+
+        let progressed = false
+
+        if (
+          context.settings.visionEnabled &&
+          toolPlan.useVision &&
+          !executedTools.includes("vision")
+        ) {
+          const useCurrent =
+            (toolPlan.visionMode === "current" && messageImages.length > 0) ||
+            (toolPlan.visionMode !== "recent" && messageImages.length > 0)
+          const useRecent = !useCurrent && !!latestEvidence
+
+          if (useCurrent) {
+            try {
+              const analyze = await context.analyzeVision({
+                query: toolPlan.visionQuery?.trim() || question,
+                imageUrls: messageImages
+              })
+              const details = analyze.details
+              const detailLines = [
+                details.scene ? `Scene: ${details.scene}` : undefined,
+                details.objects?.length ? `Objects: ${details.objects.join(", ")}` : undefined,
+                details.texts?.length ? `Texts: ${details.texts.join(" | ")}` : undefined,
+                details.warnings?.length ? `Warnings: ${details.warnings.join(" | ")}` : undefined,
+                details.confidence ? `Confidence: ${details.confidence}` : undefined
+              ]
+                .filter(Boolean)
+                .join("\n")
+              visionSummaryForMemory = analyze.summary
+              visionContextBlocks.push(
+                ["VisionContext(CurrentImages):", `Summary: ${analyze.summary}`, detailLines]
+                  .filter(Boolean)
+                  .join("\n")
+              )
+              context.appendVisionEvidence({
+                messageId: event.message_id !== undefined ? String(event.message_id) : undefined,
+                imageUrls: messageImages,
+                summary: analyze.summary,
+                details: JSON.stringify(analyze.details)
+              })
+              context.log("Vision analyze completed", {
+                mode: "current_images",
+                image_count: messageImages.length,
+                latency_ms: analyze.latencyMs
+              })
+            } catch (error) {
+              context.log("Vision analyze failed", {
+                mode: "current_images",
+                error: error instanceof Error ? error.message : String(error)
+              })
+            }
+            executedTools.push("vision")
+            progressed = true
+          } else if (useRecent && latestEvidence) {
+            visionContextBlocks.push(`VisionMemory(PreviousSummary): ${latestEvidence.summary}`)
+            try {
+              const analyze = await context.analyzeVision({
+                query:
+                  toolPlan.visionQuery?.trim() ||
+                  `Follow-up question on prior image(s): ${question}`,
+                imageUrls: latestEvidence.imageUrls
+              })
+              const details = analyze.details
+              const detailLines = [
+                details.scene ? `Scene: ${details.scene}` : undefined,
+                details.objects?.length ? `Objects: ${details.objects.join(", ")}` : undefined,
+                details.texts?.length ? `Texts: ${details.texts.join(" | ")}` : undefined,
+                details.warnings?.length ? `Warnings: ${details.warnings.join(" | ")}` : undefined,
+                details.confidence ? `Confidence: ${details.confidence}` : undefined
+              ]
+                .filter(Boolean)
+                .join("\n")
+              visionSummaryForMemory = analyze.summary
+              visionContextBlocks.push(
+                ["VisionContext(Recheck):", `Summary: ${analyze.summary}`, detailLines]
+                  .filter(Boolean)
+                  .join("\n")
+              )
+              context.appendVisionEvidence({
+                messageId: latestEvidence.messageId,
+                imageUrls: latestEvidence.imageUrls,
+                summary: analyze.summary,
+                details: JSON.stringify(analyze.details)
+              })
+              context.log("Vision analyze completed", {
+                mode: "recheck_previous",
+                image_count: latestEvidence.imageUrls.length,
+                latency_ms: analyze.latencyMs
+              })
+            } catch (error) {
+              context.log("Vision analyze failed", {
+                mode: "recheck_previous",
+                error: error instanceof Error ? error.message : String(error)
+              })
+            }
+            executedTools.push("vision")
+            progressed = true
+          } else {
+            context.log("Vision tool planned but no usable image source")
+            executedTools.push("vision")
+          }
+        }
+
+        if (
+          context.settings.webSearchEnabled &&
+          toolPlan.useWebSearch &&
+          !executedTools.includes("webSearch")
+        ) {
+          const maxCalls = Math.max(1, context.settings.webSearchMaxCallsPerMessage)
+          let query = toolPlan.webSearchQuery?.trim() || question
+          let searchCount = 0
+          let hitCount = 0
+          let lastError = ""
+          for (let index = 0; index < maxCalls; index += 1) {
+            searchCount += 1
+            try {
+              const searchResult = await context.searchWeb({ query })
+              const items = searchResult.items.slice(0, context.settings.webSearchCountPerCall)
+              hitCount += items.length
+              if (items.length > 0) {
+                const lines = items.map((item, itemIndex) =>
+                  [
+                    `${itemIndex + 1}. ${item.title}`,
+                    `URL: ${item.url}`,
+                    item.summary ? `Summary: ${item.summary}` : undefined,
+                    item.snippet ? `Snippet: ${item.snippet}` : undefined,
+                    item.siteName ? `Site: ${item.siteName}` : undefined,
+                    item.datePublished ? `Date: ${item.datePublished}` : undefined
+                  ]
+                    .filter(Boolean)
+                    .join("\n")
+                )
+                searchContextBlocks.push([`SearchQuery: ${searchResult.query}`, ...lines].join("\n\n"))
+                break
+              }
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error)
+            }
+            if (index === 0) {
+              query = `${question} 官方 来源`
+            }
+          }
+          context.log("Web search attempt finished", {
+            search_count: searchCount,
+            hit_count: hitCount,
+            error: lastError || undefined
+          })
+          executedTools.push("webSearch")
+          progressed = true
+        }
+
+        if (!progressed) {
+          break
+        }
+      }
+
       for (const url of urls.slice(0, context.settings.webFetchMaxUrlsPerMessage)) {
         try {
           const fetched = await context.fetchUrl(url)
@@ -68,14 +305,18 @@ export const chatPlugin: BotPlugin = {
         }
       }
 
+      const mergedContextBlocks = [...visionContextBlocks, ...searchContextBlocks, ...webContextBlocks]
       const extraContext =
-        webContextBlocks.length > 0
-          ? `Fetched URL context:\n\n${webContextBlocks.join("\n\n---\n\n")}`
+        mergedContextBlocks.length > 0
+          ? `External context:\n\n${mergedContextBlocks.join("\n\n---\n\n")}`
           : undefined
-      const history = context.getRecentHistory(context.settings.memoryMaxTurns)
       const answer = await context.askLlm(question, extraContext, history)
       await context.reply(answer)
-      context.appendHistoryTurn(question, answer)
+      const memoryQuestion =
+        visionSummaryForMemory && !question.includes(visionSummaryForMemory)
+          ? `${question}\n[VisionSummary]\n${visionSummaryForMemory}`
+          : question
+      context.appendHistoryTurn(memoryQuestion, answer)
       context.log("LLM reply completed")
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error"

@@ -33,6 +33,9 @@ export const pluginRoutes = (deps: AppDeps) =>
       const next = deps.pluginManager.updatePermissions(params.id, {
         llm: typeof payload.llm === "boolean" ? payload.llm : undefined,
         webFetch: typeof payload.webFetch === "boolean" ? payload.webFetch : undefined,
+        webSearch: typeof payload.webSearch === "boolean" ? payload.webSearch : undefined,
+        visionAnalyze:
+          typeof payload.visionAnalyze === "boolean" ? payload.visionAnalyze : undefined,
         imageGenerate:
           typeof payload.imageGenerate === "boolean" ? payload.imageGenerate : undefined,
         replyPrivate: typeof payload.replyPrivate === "boolean" ? payload.replyPrivate : undefined,

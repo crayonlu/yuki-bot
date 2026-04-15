@@ -111,6 +111,53 @@ export class ConfigService {
     if (payload.webFetchMaxUrlsPerMessage && payload.webFetchMaxUrlsPerMessage < 1) {
       throw new Error("webFetchMaxUrlsPerMessage must be >= 1")
     }
+    if (payload.webSearchTimeoutMs && payload.webSearchTimeoutMs < 1000) {
+      throw new Error("webSearchTimeoutMs must be >= 1000")
+    }
+    if (payload.webSearchMaxCallsPerMessage && payload.webSearchMaxCallsPerMessage < 1) {
+      throw new Error("webSearchMaxCallsPerMessage must be >= 1")
+    }
+    if (payload.webSearchMaxCallsPerMessage && payload.webSearchMaxCallsPerMessage > 10) {
+      throw new Error("webSearchMaxCallsPerMessage must be <= 10")
+    }
+    if (payload.webSearchCountPerCall && payload.webSearchCountPerCall < 1) {
+      throw new Error("webSearchCountPerCall must be >= 1")
+    }
+    if (payload.webSearchCountPerCall && payload.webSearchCountPerCall > 50) {
+      throw new Error("webSearchCountPerCall must be <= 50")
+    }
+    if (payload.webSearchFreshness !== undefined) {
+      const freshness = payload.webSearchFreshness.trim()
+      if (!freshness) {
+        throw new Error("webSearchFreshness must not be empty")
+      }
+      payload.webSearchFreshness = freshness
+    }
+    if (payload.visionModel !== undefined) {
+      const model = payload.visionModel.trim()
+      if (!model) {
+        throw new Error("visionModel must not be empty")
+      }
+      payload.visionModel = model
+    }
+    if (payload.visionSummaryMaxChars && payload.visionSummaryMaxChars < 100) {
+      throw new Error("visionSummaryMaxChars must be >= 100")
+    }
+    if (payload.visionSummaryMaxChars && payload.visionSummaryMaxChars > 4000) {
+      throw new Error("visionSummaryMaxChars must be <= 4000")
+    }
+    if (payload.visionEvidenceLookback && payload.visionEvidenceLookback < 1) {
+      throw new Error("visionEvidenceLookback must be >= 1")
+    }
+    if (payload.visionEvidenceLookback && payload.visionEvidenceLookback > 10) {
+      throw new Error("visionEvidenceLookback must be <= 10")
+    }
+    if (payload.visionDetail !== undefined) {
+      const detail = payload.visionDetail
+      if (!["auto", "low", "high"].includes(detail)) {
+        throw new Error("visionDetail must be one of auto/low/high")
+      }
+    }
 
     return this.db.updateSettings(payload)
   }
