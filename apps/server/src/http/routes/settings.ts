@@ -72,7 +72,14 @@ export const settingsRoutes = (deps: AppDeps) =>
             : [],
           modelType: typeof item.model_type === "string" ? item.model_type : "unknown"
         }))
-        .filter((item) => item.modelType === "chat" || item.endpoints.includes("chat/completions"))
+        .filter(
+          (item) =>
+            item.modelType === "chat" ||
+            item.modelType === "vision" ||
+            item.modelType === "multimodal" ||
+            item.modelType === "vlm" ||
+            item.endpoints.includes("chat/completions")
+        )
 
       return { ok: true, models }
     })

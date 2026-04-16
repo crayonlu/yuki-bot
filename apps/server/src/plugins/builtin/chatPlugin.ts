@@ -5,7 +5,27 @@ const HELP_TEXT =
 
 const URL_REGEX = /https?:\/\/[^\s<>"'`]+/gi
 
-const extractUrls = (text: string) => Array.from(new Set(text.match(URL_REGEX) ?? []))
+const decodeHtmlEntities = (value: string) =>
+  value
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+
+const cleanupUrl = (raw: string) => {
+  const decoded = decodeHtmlEntities(raw).trim()
+  const cutByComma = decoded.split(",")[0] ?? decoded
+  const normalized = cutByComma.replace(/[\]\s]+$/g, "")
+  return normalized
+}
+
+const looksLikeImageInputUrl = (value: string) => /^(https?:\/\/|data:image\/)/i.test(value)
+
+const stripImageCqSegments = (text: string) => text.replace(/\[CQ:image,[^\]]+\]/gi, " ")
+
+const extractUrls = (text: string) =>
+  Array.from(new Set((stripImageCqSegments(text).match(URL_REGEX) ?? []).map(cleanupUrl)))
 
 const extractFromMessageSegments = (
   segments: { type: string; data?: Record<string, string> }[] | undefined
@@ -15,7 +35,10 @@ const extractFromMessageSegments = (
     .flatMap((segment) => {
       const url = segment.data?.url?.trim()
       const file = segment.data?.file?.trim()
-      return [url, file].filter((item): item is string => !!item)
+      return [url, file]
+        .filter((item): item is string => !!item)
+        .map(cleanupUrl)
+        .filter((item) => looksLikeImageInputUrl(item))
     })
 
 const extractFromRawMessage = (rawMessage: string) => {
@@ -24,8 +47,8 @@ const extractFromRawMessage = (rawMessage: string) => {
   for (const token of matches) {
     const url = token.match(/url=([^,\]]+)/)?.[1]
     const file = token.match(/file=([^,\]]+)/)?.[1]
-    if (url) values.push(url)
-    if (file) values.push(file)
+    if (url) values.push(cleanupUrl(url))
+    if (file && looksLikeImageInputUrl(file)) values.push(cleanupUrl(file))
   }
   return values
 }
@@ -46,7 +69,9 @@ const collectMessageImages = async (
   const quotedImages = quoted
     ? [...extractFromMessageSegments(quoted.message), ...extractFromRawMessage(quoted.raw_message)]
     : []
-  return [...new Set([...current, ...raw, ...quotedImages])]
+  return [...new Set([...current, ...raw, ...quotedImages])].filter((item) =>
+    looksLikeImageInputUrl(item)
+  )
 }
 
 export const chatPlugin: BotPlugin = {

@@ -298,7 +298,21 @@
     </label>
     <label>
       Vision Model
-      <input bind:value={settings.visionModel} placeholder="e.g. qwen/qwen2.5-vl-72b-instruct" />
+      <div class="model-row">
+        <select bind:value={settings.visionModel}>
+          {#if remoteModels.length === 0}
+            <option value={settings.visionModel}>{settings.visionModel || "No models loaded"}</option>
+          {:else}
+            {#each remoteModels as model}
+              <option value={model.id}>{model.displayName} ({model.id})</option>
+            {/each}
+          {/if}
+        </select>
+        <button type="button" on:click={loadRemoteModels} disabled={loadingModels}>
+          {loadingModels ? "Loading..." : "Refresh"}
+        </button>
+      </div>
+      <input bind:value={settings.visionModel} placeholder="Custom vision model id (optional)" />
     </label>
     <label>
       Vision Detail

@@ -9,9 +9,13 @@ const extractJsonBlock = (content: string) => {
 }
 
 const normalizeToolPlan = (parsed: Partial<ToolPlanResult>): ToolPlanResult => ({
-  useWebSearch: !!parsed.useWebSearch,
+  useWebSearch: !!parsed.useWebSearch || typeof parsed.webSearchQuery === "string",
   webSearchQuery: typeof parsed.webSearchQuery === "string" ? parsed.webSearchQuery : undefined,
-  useVision: !!parsed.useVision,
+  useVision:
+    !!parsed.useVision ||
+    parsed.visionMode === "current" ||
+    parsed.visionMode === "recent" ||
+    typeof parsed.visionQuery === "string",
   visionMode:
     parsed.visionMode === "recent"
       ? "recent"
