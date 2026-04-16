@@ -122,7 +122,7 @@ export class WebSearchService {
             },
             signal: controller.signal,
             body: JSON.stringify({
-              query,
+              q: query,
               num: count,
               tbs: timeRange,
               autocorrect: true
