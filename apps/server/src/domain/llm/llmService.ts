@@ -1,6 +1,7 @@
 import type { BotSettings, ChatMessage } from "@bot/shared"
 import type { AppLogger } from "../../infra/logger"
 import type { ToolPlanResult } from "../../plugins/types"
+import { isRetryableErrorText, runWithRetry } from "../common/retry"
 
 const extractJsonBlock = (content: string) => {
   const fenced = content.match(/```json\s*([\s\S]*?)```/i)?.[1]
@@ -141,47 +142,54 @@ export class LlmService {
         }
       }
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${settings.apiKey}`
-        },
-        signal: controller.signal,
-        body: JSON.stringify(payload)
-      })
-      if (!response.ok) {
-        const reason = await response.text()
-        throw new Error(`tool planner request failed(${response.status}): ${reason}`)
-      }
-      const data = (await response.json()) as {
-        choices?: Array<{
-          message?: {
-            content?: string
-            tool_calls?: Array<{
-              type?: string
-              function?: {
-                name?: string
-                arguments?: string
+      return runWithRetry({
+        attempts: 2,
+        delayMs: 600,
+        shouldRetry: isRetryableErrorText,
+        task: async () => {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${settings.apiKey}`
+            },
+            signal: controller.signal,
+            body: JSON.stringify(payload)
+          })
+          if (!response.ok) {
+            const reason = await response.text()
+            throw new Error(`tool planner request failed(${response.status}): ${reason}`)
+          }
+          const data = (await response.json()) as {
+            choices?: Array<{
+              message?: {
+                content?: string
+                tool_calls?: Array<{
+                  type?: string
+                  function?: {
+                    name?: string
+                    arguments?: string
+                  }
+                }>
               }
             }>
           }
-        }>
-      }
-      const choice = data.choices?.[0]?.message
-      const toolCall = choice?.tool_calls?.find(
-        (item) => item.type === "function" && item.function?.name === "decide_tools"
-      )
-      if (toolCall?.function?.arguments) {
-        const parsed = JSON.parse(toolCall.function.arguments) as Partial<ToolPlanResult>
-        return normalizeToolPlan(parsed)
-      }
-      const content = choice?.content
-      if (!content) {
-        throw new Error("tool planner response is empty")
-      }
-      const parsed = JSON.parse(extractJsonBlock(content)) as Partial<ToolPlanResult>
-      return normalizeToolPlan(parsed)
+          const choice = data.choices?.[0]?.message
+          const toolCall = choice?.tool_calls?.find(
+            (item) => item.type === "function" && item.function?.name === "decide_tools"
+          )
+          if (toolCall?.function?.arguments) {
+            const parsed = JSON.parse(toolCall.function.arguments) as Partial<ToolPlanResult>
+            return normalizeToolPlan(parsed)
+          }
+          const content = choice?.content
+          if (!content) {
+            throw new Error("tool planner response is empty")
+          }
+          const parsed = JSON.parse(extractJsonBlock(content)) as Partial<ToolPlanResult>
+          return normalizeToolPlan(parsed)
+        }
+      })
     }
 
     try {
@@ -234,33 +242,40 @@ export class LlmService {
     ]
 
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${settings.apiKey}`
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: settings.model,
-          messages,
-          temperature: 0.7
-        })
+      return runWithRetry({
+        attempts: 2,
+        delayMs: 800,
+        shouldRetry: isRetryableErrorText,
+        task: async () => {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${settings.apiKey}`
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model: settings.model,
+              messages,
+              temperature: 0.7
+            })
+          })
+
+          if (!response.ok) {
+            const reason = await response.text()
+            throw new Error(`LLM request failed(${response.status}): ${reason}`)
+          }
+
+          const data = (await response.json()) as {
+            choices?: { message?: { content?: string } }[]
+          }
+          const content = data.choices?.[0]?.message?.content
+          if (!content) {
+            throw new Error("LLM response is empty")
+          }
+          return content
+        }
       })
-
-      if (!response.ok) {
-        const reason = await response.text()
-        throw new Error(`LLM request failed(${response.status}): ${reason}`)
-      }
-
-      const data = (await response.json()) as {
-        choices?: { message?: { content?: string } }[]
-      }
-      const content = data.choices?.[0]?.message?.content
-      if (!content) {
-        throw new Error("LLM response is empty")
-      }
-      return content
     } catch (error) {
       this.log.error(
         "OpenAI-compatible call failed",

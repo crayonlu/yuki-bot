@@ -335,7 +335,20 @@ export const chatPlugin: BotPlugin = {
         mergedContextBlocks.length > 0
           ? `External context:\n\n${mergedContextBlocks.join("\n\n---\n\n")}`
           : undefined
-      const answer = await context.askLlm(question, extraContext, history)
+      let answer = ""
+      try {
+        answer = await context.askLlm(question, extraContext, history)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (/aborted|timeout|429|server overload/i.test(message)) {
+          context.log("Primary LLM call failed, retry with reduced context", {
+            reason: message
+          })
+          answer = await context.askLlm(question, undefined, history.slice(-4))
+        } else {
+          throw error
+        }
+      }
       await context.reply(answer)
       const memoryQuestion =
         visionSummaryForMemory && !question.includes(visionSummaryForMemory)

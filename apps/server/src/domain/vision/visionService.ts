@@ -1,6 +1,7 @@
 import type { BotSettings } from "@bot/shared"
 import type { AppLogger } from "../../infra/logger"
 import type { VisionAnalyzeResult } from "../../plugins/types"
+import { isRetryableErrorText, runWithRetry } from "../common/retry"
 
 const normalizeJsonText = (text: string) => {
   const fenced = text.match(/```json\s*([\s\S]*?)```/i)?.[1]
@@ -53,49 +54,57 @@ export class VisionService {
     ].join("\n")
 
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${settings.apiKey}`
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: settings.visionModel,
-          messages: [
-            { role: "system", content: instruction },
-            {
-              role: "user",
-              content: [
-                ...imageUrls.map((url) => ({
-                  type: "image_url",
-                  image_url: {
-                    url,
-                    detail: settings.visionDetail
-                  }
-                })),
+      const content = await runWithRetry({
+        attempts: 2,
+        delayMs: 800,
+        shouldRetry: isRetryableErrorText,
+        task: async () => {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${settings.apiKey}`
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model: settings.visionModel,
+              messages: [
+                { role: "system", content: instruction },
                 {
-                  type: "text",
-                  text: `Question: ${query}\nFocus on evidence relevant to the question.`
+                  role: "user",
+                  content: [
+                    ...imageUrls.map((url) => ({
+                      type: "image_url",
+                      image_url: {
+                        url,
+                        detail: settings.visionDetail
+                      }
+                    })),
+                    {
+                      type: "text",
+                      text: `Question: ${query}\nFocus on evidence relevant to the question.`
+                    }
+                  ]
                 }
-              ]
-            }
-          ],
-          temperature: 0.2
-        })
-      })
-      if (!response.ok) {
-        const reason = await response.text()
-        throw new Error(`vision request failed(${response.status}): ${reason}`)
-      }
+              ],
+              temperature: 0.2
+            })
+          })
+          if (!response.ok) {
+            const reason = await response.text()
+            throw new Error(`vision request failed(${response.status}): ${reason}`)
+          }
 
-      const data = (await response.json()) as {
-        choices?: { message?: { content?: string } }[]
-      }
-      const content = data.choices?.[0]?.message?.content
-      if (!content) {
-        throw new Error("vision response is empty")
-      }
+          const data = (await response.json()) as {
+            choices?: { message?: { content?: string } }[]
+          }
+          const content = data.choices?.[0]?.message?.content ?? ""
+          if (!content) {
+            throw new Error("vision response is empty")
+          }
+          return content
+        }
+      })
 
       const rawJson = normalizeJsonText(content)
       let parsed: {
