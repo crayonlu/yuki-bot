@@ -114,6 +114,24 @@ export class ConfigService {
     if (payload.webSearchTimeoutMs && payload.webSearchTimeoutMs < 1000) {
       throw new Error("webSearchTimeoutMs must be >= 1000")
     }
+    if (payload.webSearchProviders !== undefined) {
+      const allowed = new Set(["serper", "tavily", "serpapi"])
+      const normalized = payload.webSearchProviders.filter((item) => allowed.has(item))
+      const unique = [...new Set(normalized)]
+      if (unique.length === 0) {
+        throw new Error("webSearchProviders must include at least one provider")
+      }
+      payload.webSearchProviders = unique as ("serper" | "tavily" | "serpapi")[]
+    }
+    if (payload.webSearchSerperApiKey !== undefined) {
+      payload.webSearchSerperApiKey = payload.webSearchSerperApiKey.trim()
+    }
+    if (payload.webSearchTavilyApiKey !== undefined) {
+      payload.webSearchTavilyApiKey = payload.webSearchTavilyApiKey.trim()
+    }
+    if (payload.webSearchSerpApiKey !== undefined) {
+      payload.webSearchSerpApiKey = payload.webSearchSerpApiKey.trim()
+    }
     if (payload.webSearchMaxCallsPerMessage && payload.webSearchMaxCallsPerMessage < 1) {
       throw new Error("webSearchMaxCallsPerMessage must be >= 1")
     }

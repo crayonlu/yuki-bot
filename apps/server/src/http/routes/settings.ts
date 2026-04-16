@@ -133,6 +133,22 @@ export const settingsRoutes = (deps: AppDeps) =>
             : undefined,
         webSearchEnabled:
           typeof payload.webSearchEnabled === "boolean" ? payload.webSearchEnabled : undefined,
+        webSearchProviders: Array.isArray(payload.webSearchProviders)
+          ? payload.webSearchProviders.filter(
+              (item): item is "serper" | "tavily" | "serpapi" =>
+                item === "serper" || item === "tavily" || item === "serpapi"
+            )
+          : undefined,
+        webSearchSerperApiKey:
+          typeof payload.webSearchSerperApiKey === "string"
+            ? payload.webSearchSerperApiKey
+            : undefined,
+        webSearchTavilyApiKey:
+          typeof payload.webSearchTavilyApiKey === "string"
+            ? payload.webSearchTavilyApiKey
+            : undefined,
+        webSearchSerpApiKey:
+          typeof payload.webSearchSerpApiKey === "string" ? payload.webSearchSerpApiKey : undefined,
         webSearchTimeoutMs:
           typeof payload.webSearchTimeoutMs === "number" ? payload.webSearchTimeoutMs : undefined,
         webSearchMaxCallsPerMessage:
@@ -147,10 +163,13 @@ export const settingsRoutes = (deps: AppDeps) =>
           typeof payload.webSearchFreshness === "string" ? payload.webSearchFreshness : undefined,
         webSearchSummary:
           typeof payload.webSearchSummary === "boolean" ? payload.webSearchSummary : undefined,
-        visionEnabled: typeof payload.visionEnabled === "boolean" ? payload.visionEnabled : undefined,
+        visionEnabled:
+          typeof payload.visionEnabled === "boolean" ? payload.visionEnabled : undefined,
         visionModel: typeof payload.visionModel === "string" ? payload.visionModel : undefined,
         visionDetail:
-          payload.visionDetail === "auto" || payload.visionDetail === "low" || payload.visionDetail === "high"
+          payload.visionDetail === "auto" ||
+          payload.visionDetail === "low" ||
+          payload.visionDetail === "high"
             ? payload.visionDetail
             : undefined,
         visionSummaryMaxChars:

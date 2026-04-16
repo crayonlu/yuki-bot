@@ -470,7 +470,8 @@ export class PluginManager {
             this.sessionMemoryService.getRecentHistory(event, maxTurns),
           appendHistoryTurn: (userText: string, assistantText: string) =>
             this.sessionMemoryService.appendTurn(event, userText, assistantText),
-          appendVisionEvidence: (input) => this.sessionMemoryService.appendVisionEvidence(event, input),
+          appendVisionEvidence: (input) =>
+            this.sessionMemoryService.appendVisionEvidence(event, input),
           getRecentVisionEvidences: (limit: number) =>
             this.sessionMemoryService.getRecentVisionEvidences(event, limit),
           clearHistory: () => this.sessionMemoryService.clear(event),

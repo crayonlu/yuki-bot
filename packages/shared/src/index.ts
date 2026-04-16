@@ -12,13 +12,9 @@ export type ImageModelConfig = {
   endpoint: string
 }
 
-export type WebSearchFreshness =
-  | "noLimit"
-  | "oneDay"
-  | "oneWeek"
-  | "oneMonth"
-  | "oneYear"
-  | string
+export type WebSearchFreshness = "noLimit" | "oneDay" | "oneWeek" | "oneMonth" | "oneYear" | string
+
+export type WebSearchProvider = "serper" | "tavily" | "serpapi"
 
 export type BotSettings = {
   providerId: string
@@ -38,6 +34,10 @@ export type BotSettings = {
   webFetchMaxRedirects: number
   webFetchMaxUrlsPerMessage: number
   webSearchEnabled: boolean
+  webSearchProviders: WebSearchProvider[]
+  webSearchSerperApiKey: string
+  webSearchTavilyApiKey: string
+  webSearchSerpApiKey: string
   webSearchTimeoutMs: number
   webSearchMaxCallsPerMessage: number
   webSearchCountPerCall: number

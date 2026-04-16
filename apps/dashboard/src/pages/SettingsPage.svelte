@@ -51,6 +51,19 @@
   };
 
   const looksLikeHttpUrl = (value: string) => /^https?:\/\//i.test(value.trim());
+  const searchProviderOptions = ["serper", "tavily", "serpapi"] as const;
+
+  const toggleSearchProvider = (provider: (typeof searchProviderOptions)[number]) => {
+    if (!settings) return;
+    const current = settings.webSearchProviders ?? [];
+    if (current.includes(provider)) {
+      const next = current.filter((item) => item !== provider);
+      if (next.length === 0) return;
+      settings.webSearchProviders = next;
+      return;
+    }
+    settings.webSearchProviders = [...current, provider];
+  };
 
   const applyImageRowsToSettings = () => {
     const current = settings;
@@ -260,6 +273,33 @@
       <span>Web Search Enabled</span>
       <input type="checkbox" bind:checked={settings.webSearchEnabled} />
     </label>
+    <div class="image-models">
+      <span class="title">Web Search Providers (fallback order)</span>
+      <div class="provider-pills">
+        {#each searchProviderOptions as provider}
+          <button
+            type="button"
+            class={`provider-pill ${settings.webSearchProviders.includes(provider) ? "active" : ""}`}
+            on:click={() => toggleSearchProvider(provider)}
+          >
+            {provider}
+          </button>
+        {/each}
+      </div>
+      <small class="muted">Order is fixed: serper -> tavily -> serpapi</small>
+    </div>
+    <label>
+      Serper API Key
+      <input type="password" bind:value={settings.webSearchSerperApiKey} placeholder="serper key" />
+    </label>
+    <label>
+      Tavily API Key
+      <input type="password" bind:value={settings.webSearchTavilyApiKey} placeholder="tavily key" />
+    </label>
+    <label>
+      SerpAPI Key
+      <input type="password" bind:value={settings.webSearchSerpApiKey} placeholder="serpapi key" />
+    </label>
     <label>
       Web Search Timeout (ms)
       <input type="number" min="1000" step="1000" bind:value={settings.webSearchTimeoutMs} />
@@ -424,6 +464,22 @@
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 8px;
+  }
+  .provider-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .provider-pill {
+    width: auto;
+    border: 1px solid #d0d5dd;
+    border-radius: 999px;
+    padding: 6px 12px;
+  }
+  .provider-pill.active {
+    background: #eff4ff;
+    border-color: #c7d7fe;
+    color: #1849a9;
   }
   @media (max-width: 768px) {
     button {

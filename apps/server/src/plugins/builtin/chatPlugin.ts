@@ -155,12 +155,14 @@ export const chatPlugin: BotPlugin = {
         })
 
         let progressed = false
+        const shouldRunVision =
+          context.settings.visionEnabled && toolPlan.useVision && !executedTools.includes("vision")
+        const shouldRunWebSearch =
+          context.settings.webSearchEnabled &&
+          toolPlan.useWebSearch &&
+          !executedTools.includes("webSearch")
 
-        if (
-          context.settings.visionEnabled &&
-          toolPlan.useVision &&
-          !executedTools.includes("vision")
-        ) {
+        const runVisionTask = async (): Promise<boolean> => {
           const useCurrent =
             (toolPlan.visionMode === "current" && messageImages.length > 0) ||
             (toolPlan.visionMode !== "recent" && messageImages.length > 0)
@@ -206,8 +208,10 @@ export const chatPlugin: BotPlugin = {
               })
             }
             executedTools.push("vision")
-            progressed = true
-          } else if (useRecent && latestEvidence) {
+            return true
+          }
+
+          if (useRecent && latestEvidence) {
             visionContextBlocks.push(`VisionMemory(PreviousSummary): ${latestEvidence.summary}`)
             try {
               const analyze = await context.analyzeVision({
@@ -250,18 +254,15 @@ export const chatPlugin: BotPlugin = {
               })
             }
             executedTools.push("vision")
-            progressed = true
-          } else {
-            context.log("Vision tool planned but no usable image source")
-            executedTools.push("vision")
+            return true
           }
+
+          context.log("Vision tool planned but no usable image source")
+          executedTools.push("vision")
+          return false
         }
 
-        if (
-          context.settings.webSearchEnabled &&
-          toolPlan.useWebSearch &&
-          !executedTools.includes("webSearch")
-        ) {
+        const runWebSearchTask = async (): Promise<boolean> => {
           const maxCalls = Math.max(1, context.settings.webSearchMaxCallsPerMessage)
           let query = toolPlan.webSearchQuery?.trim() || question
           let searchCount = 0
@@ -286,7 +287,9 @@ export const chatPlugin: BotPlugin = {
                     .filter(Boolean)
                     .join("\n")
                 )
-                searchContextBlocks.push([`SearchQuery: ${searchResult.query}`, ...lines].join("\n\n"))
+                searchContextBlocks.push(
+                  [`SearchQuery: ${searchResult.query}`, ...lines].join("\n\n")
+                )
                 break
               }
             } catch (error) {
@@ -302,7 +305,38 @@ export const chatPlugin: BotPlugin = {
             error: lastError || undefined
           })
           executedTools.push("webSearch")
-          progressed = true
+          return true
+        }
+
+        if (shouldRunVision && shouldRunWebSearch) {
+          context.log("Running vision and webSearch in parallel")
+          const [visionResult, searchResult] = await Promise.allSettled([
+            runVisionTask(),
+            runWebSearchTask()
+          ])
+          progressed =
+            (visionResult.status === "fulfilled" && visionResult.value) ||
+            (searchResult.status === "fulfilled" && searchResult.value)
+          if (visionResult.status === "rejected") {
+            context.log("Parallel vision task crashed", {
+              error:
+                visionResult.reason instanceof Error
+                  ? visionResult.reason.message
+                  : String(visionResult.reason)
+            })
+          }
+          if (searchResult.status === "rejected") {
+            context.log("Parallel webSearch task crashed", {
+              error:
+                searchResult.reason instanceof Error
+                  ? searchResult.reason.message
+                  : String(searchResult.reason)
+            })
+          }
+        } else if (shouldRunVision) {
+          progressed = await runVisionTask()
+        } else if (shouldRunWebSearch) {
+          progressed = await runWebSearchTask()
         }
 
         if (!progressed) {
@@ -330,7 +364,11 @@ export const chatPlugin: BotPlugin = {
         }
       }
 
-      const mergedContextBlocks = [...visionContextBlocks, ...searchContextBlocks, ...webContextBlocks]
+      const mergedContextBlocks = [
+        ...visionContextBlocks,
+        ...searchContextBlocks,
+        ...webContextBlocks
+      ]
       const extraContext =
         mergedContextBlocks.length > 0
           ? `External context:\n\n${mergedContextBlocks.join("\n\n---\n\n")}`
